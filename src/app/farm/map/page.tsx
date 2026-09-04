@@ -57,7 +57,7 @@ export default function FarmMapPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const [nutrientRange, setNutrientRange] = useState("1y");
+  const [nutrientRange, setNutrientRange] = useState("ytd");
 
   const [view, setView] = useState<ViewBox>(BASE_VIEW);
   const svgRef = useRef<SVGSVGElement | null>(null);
