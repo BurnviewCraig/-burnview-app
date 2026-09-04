@@ -13,6 +13,7 @@ import { projectBoundariesShared, fitRingsToViewBox, type BoundaryGeometry } fro
 import { LAND_TYPES, NUTRIENT_RANGES, LAND_TYPE_COLORS, UNCLASSIFIED_COLOR } from "@/lib/constants";
 import type { WedgeFarm, FieldActivity, PastureWalk, FertilizerType, GrazingAllocation } from "@/lib/types";
 import { EditEntryPanel, type EditableEntry } from "@/components/EditEntryPanel";
+import { buildFieldHistory } from "@/lib/fieldHistory";
 
 type ViewBox = { x: number; y: number; w: number; h: number };
 const BASE_VIEW: ViewBox = { x: 0, y: 0, w: 900, h: 620 };
@@ -33,12 +34,6 @@ function brighten(hex: string, amount: number): string {
   const b = n & 0xff;
   const mix = (c: number) => Math.round(c + (255 - c) * amount);
   return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
-}
-
-function diffDays(a: string, b: string): number {
-  const da = new Date(a + "T00:00:00Z").getTime();
-  const db = new Date(b + "T00:00:00Z").getTime();
-  return Math.round((db - da) / 86400000);
 }
 
 function clientToViewBoxPoint(svg: SVGSVGElement, clientX: number, clientY: number) {
@@ -62,7 +57,7 @@ export default function FarmMapPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const [nutrientRange, setNutrientRange] = useState("ytd");
+  const [nutrientRange, setNutrientRange] = useState("1y");
 
   const [view, setView] = useState<ViewBox>(BASE_VIEW);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -334,71 +329,17 @@ export default function FarmMapPage() {
     refetchWalks();
   };
 
+  // The map only needs a recent snapshot — the full lifetime history for a
+  // camp lives on the dedicated Full field history page instead.
   const history = useMemo(() => {
     if (!selectedPaddock) return [];
-    const acts = (historyActivities?.activities ?? []).map((a) => ({
-      id: a.id,
-      isWalk: false,
-      date: a.date,
-      type: a.type.replace("_", " "),
-      product: a.product,
-      rate: a.rate,
-      method: a.method,
-      depth: a.depth,
-      mix: a.mix,
-      chemicals: a.chemicals,
-      bales: a.bales,
-      notes: a.notes,
-    }));
-    const walks = (historyWalks?.walks ?? []).map((w) => ({
-      id: w.id,
-      isWalk: true,
-      date: w.date,
-      type: "Pasture walk",
-      notes: `${w.cover} kg DM/ha`,
-    }));
-    // Only past/today's grazing counts as history — a few days out shows on
-    // the allocation calendar as a plan, not as something that's happened yet.
-    // A group grazing the same camp for a run of consecutive days (day+night
-    // included) collapses into one row dated at the end of that run, rather
-    // than a row per session.
-    const rows = (paddockGrazing?.allocations ?? [])
-      .filter((g) => g.date.slice(0, 10) <= today)
-      .map((g) => ({ groupId: g.groupId, groupName: g.group.name, date: g.date.slice(0, 10), count: g.count ?? null }))
-      .sort((a, b) => (a.date < b.date ? -1 : 1));
-    const byGroup = new Map<string, typeof rows>();
-    rows.forEach((r) => byGroup.set(r.groupId, [...(byGroup.get(r.groupId) ?? []), r]));
-    const grazed: { id: string; isWalk: boolean; isGrazing: boolean; date: string; type: string; notes: string }[] = [];
-    byGroup.forEach((list, groupId) => {
-      let spanStart = list[0];
-      let spanEnd = list[0];
-      for (let i = 1; i < list.length; i++) {
-        const cur = list[i];
-        if (diffDays(spanEnd.date, cur.date) <= 1) {
-          spanEnd = cur;
-        } else {
-          grazed.push({
-            id: `grazing-${groupId}-${spanStart.date}`,
-            isWalk: false,
-            isGrazing: true,
-            date: spanEnd.date,
-            type: "Grazed",
-            notes: `${spanEnd.groupName}${spanEnd.count != null ? ` (${spanEnd.count})` : ""}`,
-          });
-          spanStart = cur;
-          spanEnd = cur;
-        }
-      }
-      grazed.push({
-        id: `grazing-${groupId}-${spanStart.date}`,
-        isWalk: false,
-        isGrazing: true,
-        date: spanEnd.date,
-        type: "Grazed",
-        notes: `${spanEnd.groupName}${spanEnd.count != null ? ` (${spanEnd.count})` : ""}`,
-      });
+    return buildFieldHistory({
+      activities: historyActivities?.activities ?? [],
+      walks: historyWalks?.walks ?? [],
+      grazing: paddockGrazing?.allocations ?? [],
+      today,
+      dateFilter: (d) => withinRange(d, "3m"),
     });
-    return [...acts, ...walks, ...grazed].sort((a, b) => (a.date < b.date ? 1 : -1));
   }, [selectedPaddock, historyActivities, historyWalks, paddockGrazing, today]);
 
   const nutrientTotals = useMemo(() => {

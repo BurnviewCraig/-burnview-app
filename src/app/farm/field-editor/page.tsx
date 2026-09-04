@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { X, UploadCloud, Plus, Trash2 } from "lucide-react";
+import { X, UploadCloud, Plus, Trash2, ClipboardList } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
@@ -125,11 +125,17 @@ export default function FieldEditorPage() {
     <div className="screen">
       <Header title="Edit fields" backHref="/farm" />
 
-      <div style={{ padding: "10px 18px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Link className="link-btn" href="/farm/field-editor/import">
-          <UploadCloud size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-          Import boundaries from John Deere
-        </Link>
+      <div style={{ padding: "10px 18px 0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+          <Link className="link-btn" href="/farm/field-editor/import">
+            <UploadCloud size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+            Import boundaries from John Deere
+          </Link>
+          <Link className="link-btn" href="/farm/field-editor/history">
+            <ClipboardList size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+            Full field history
+          </Link>
+        </div>
         <button
           className="link-btn"
           onClick={() => {
