@@ -122,7 +122,7 @@ a:visited { color: var(--ink); }
    room — that in-flow approach kept getting clipped with no way to scroll
    to it on shorter screens. */
 .detail-sheet-overlay { position: fixed; inset: 0; background: rgba(35,42,30,0.45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
-.detail-sheet { width: 100%; max-width: 560px; border-top: 1px solid var(--paper-deep); border-radius: 14px 14px 0 0; padding: 16px 18px; background: var(--card); max-height: 85vh; overflow-y: auto; -webkit-overflow-scrolling: touch; box-shadow: 0 -6px 20px rgba(35,42,30,0.2); }
+.detail-sheet { width: 100%; max-width: 560px; min-height: 0; border-top: 1px solid var(--paper-deep); border-radius: 14px 14px 0 0; padding: 16px 18px; background: var(--card); max-height: 85vh; overflow-y: auto; -webkit-overflow-scrolling: touch; box-shadow: 0 -6px 20px rgba(35,42,30,0.2); }
 @media (min-width: 640px) {
   .detail-sheet { max-width: 720px; }
 }
@@ -220,8 +220,8 @@ a:visited { color: var(--ink); }
 .walk-save-bar { padding: 14px 18px; border-top: 1px solid var(--paper-deep); display:flex; flex-direction:column; gap: 8px; }
 
 .edit-entry-overlay { position: fixed; inset: 0; background: rgba(35,42,30,0.45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
-.edit-entry-panel { width: 100%; max-width: 560px; max-height: 85vh; background: var(--card); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 20px rgba(35,42,30,0.2); display: flex; flex-direction: column; overflow: hidden; }
-.edit-entry-body { padding: 14px 18px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.edit-entry-panel { width: 100%; max-width: 560px; min-height: 0; max-height: 85vh; background: var(--card); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 20px rgba(35,42,30,0.2); display: flex; flex-direction: column; overflow: hidden; }
+.edit-entry-body { flex: 1; min-height: 0; padding: 14px 18px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .edit-entry-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 .delete-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; border-radius: 8px; border: 1px solid #B5533C; background: none; color: #B5533C; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .delete-btn.confirm { background: #B5533C; color: white; }
