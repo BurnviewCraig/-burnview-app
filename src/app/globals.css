@@ -117,7 +117,18 @@ a:visited { color: var(--ink); }
 .wedge-swatch { width: 10px; height: 10px; border-radius: 2px; display:inline-block; }
 .wedge-swatch.line { width: 12px; height: 2px; background: var(--ink); border-radius: 0; }
 
-.detail-sheet { border-top: 1px solid var(--paper-deep); padding: 16px 18px; background: var(--card); max-height: 70vh; max-height: 70dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; flex-shrink: 0; }
+/* Rendered via a portal to document.body (like the edit-entry modal) so it's
+   never at the mercy of the map screen's own flex layout running out of
+   room — that in-flow approach kept getting clipped with no way to scroll
+   to it on shorter screens. */
+.detail-sheet-overlay { position: fixed; inset: 0; background: rgba(35,42,30,0.45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.detail-sheet { width: 100%; max-width: 560px; border-top: 1px solid var(--paper-deep); border-radius: 14px 14px 0 0; padding: 16px 18px; background: var(--card); max-height: 85vh; overflow-y: auto; -webkit-overflow-scrolling: touch; box-shadow: 0 -6px 20px rgba(35,42,30,0.2); }
+@media (min-width: 640px) {
+  .detail-sheet { max-width: 720px; }
+}
+@media (min-width: 900px) {
+  .detail-sheet { max-width: 900px; }
+}
 .ds-head { display:flex; justify-content:space-between; align-items:flex-start; }
 .ds-head h2 { font-size: 14.5px; margin: 0 0 6px; }
 .close { cursor:pointer; opacity:0.6; background:none; border:none; color:inherit; padding:0; }

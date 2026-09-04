@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { X, Droplets, ZoomIn, ZoomOut, Maximize, Pencil } from "lucide-react";
 import { Header } from "@/components/Header";
@@ -59,6 +60,8 @@ export default function FarmMapPage() {
   const [activeFarmId, setActiveFarmId] = useState<string | "all">("all");
   const [landCategory, setLandCategory] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [nutrientRange, setNutrientRange] = useState("ytd");
 
   const [view, setView] = useState<ViewBox>(BASE_VIEW);
@@ -639,8 +642,9 @@ export default function FarmMapPage() {
         </>
       )}
 
-      {selectedPaddock && (
-        <div className="detail-sheet">
+      {selectedPaddock && mounted && createPortal(
+        <div className="detail-sheet-overlay" onClick={() => setSelectedId(null)}>
+        <div className="detail-sheet" onClick={(e) => e.stopPropagation()}>
           <div className="ds-head">
             <div>
               <h2>{current?.name} — {selectedPaddock.code}</h2>
@@ -720,6 +724,8 @@ export default function FarmMapPage() {
             </div>
           )}
         </div>
+        </div>,
+        document.body
       )}
 
       {editingEntry && selectedPaddock && (
