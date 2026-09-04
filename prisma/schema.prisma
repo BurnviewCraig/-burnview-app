@@ -1,0 +1,253 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  fieldActivities FieldActivity[]
+  pastureWalks    PastureWalk[]
+  stockEntries    StockEntry[]
+  grazingAllocations GrazingAllocation[]
+  cattleCountEntries CattleCountEntry[]
+}
+
+model Farm {
+  id       String @id @default(cuid())
+  slug     String @unique
+  name     String
+  sortOrder Int   @default(0)
+
+  paddocks        Paddock[]
+  fieldActivities FieldActivity[]
+  pastureWalks    PastureWalk[]
+  stockEntries    StockEntry[]
+  cattleGroups    CattleGroup[]
+  grazingAllocations GrazingAllocation[]
+}
+
+model Paddock {
+  id      String  @id @default(cuid())
+  farmId  String
+  code    String
+  sizeHa  Float?
+  landType String? // "Rye grass" | "Kikuyu" | "Maize" | "Unplanted" | null (unclassified)
+  boundary Json? // GeoJSON Polygon/MultiPolygon (lon/lat), imported from John Deere Operations Center
+
+  farm            Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  fieldActivities FieldActivity[]
+  pastureWalks    PastureWalk[]
+  stockEntries    StockEntry[]
+  grazingAllocations GrazingAllocation[]
+
+  @@unique([farmId, code])
+}
+
+// A milking herd/mob — "A", "B", "C" on Burnview, "EA" on Everfair, "SA"/"SB"
+// on Stockton. Current headcount is read from the latest CattleCountEntry
+// rather than stored directly, so there's always a dated history of it.
+model CattleGroup {
+  id        String   @id @default(cuid())
+  farmId    String
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  farm        Farm                @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  allocations GrazingAllocation[]
+  counts      CattleCountEntry[]
+
+  @@unique([farmId, name])
+}
+
+enum GrazingSession {
+  DAY
+  NIGHT
+}
+
+// One camp a group grazed for one session on one date. A camp with 2+
+// allocations in a day just means 2+ of these rows across different groups
+// or sessions point at the same paddock.
+model GrazingAllocation {
+  id      String         @id @default(cuid())
+  groupId String
+  farmId  String
+  paddockId String
+  date    DateTime       @db.Date
+  session GrazingSession
+  notes   String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  group     CattleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  farm      Farm        @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  paddock   Paddock     @relation(fields: [paddockId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id])
+
+  @@unique([groupId, date, session])
+  @@index([farmId, date])
+}
+
+// Dated headcount log per group — "current numbers" is just the latest row.
+model CattleCountEntry {
+  id      String   @id @default(cuid())
+  groupId String
+  date    DateTime @db.Date
+  count   Int
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  group     CattleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id])
+
+  @@unique([groupId, date])
+}
+
+enum ActivityType {
+  FERTILIZER
+  MULCHING
+  PLANTING
+  LAND_PREP
+  SPRAYING
+  MOWING
+  BAILING
+}
+
+model FieldActivity {
+  id        String       @id @default(cuid())
+  farmId    String
+  paddockId String
+  type      ActivityType
+  date      DateTime     @db.Date
+  notes     String?
+
+  // Fertilizer
+  product String?
+  rate    Float? // kg/ha
+
+  // Land prep
+  method String?
+  depth  Float? // cm
+
+  // Planting — [{ "crop": "Rye grass", "variety": "One50", "rate": 25, "unit": "kg/ha" }, ...]
+  mix Json?
+
+  // Spraying — [{ "name": "Roundup", "rate": 2.5, "unit": "L/ha" }, ...]
+  chemicals Json?
+
+  // Bailing — product holds the bale type (e.g. "Rye Grass Rapped Bales");
+  // bales is the total count for this paddock, bales/ha computed on read.
+  bales Int?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  farm       Farm        @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  paddock    Paddock     @relation(fields: [paddockId], references: [id], onDelete: Cascade)
+  createdBy  User?       @relation(fields: [createdById], references: [id])
+  stockEntry StockEntry?
+
+  @@index([farmId, paddockId])
+}
+
+model PastureWalk {
+  id        String   @id @default(cuid())
+  farmId    String
+  paddockId String
+  date      DateTime @db.Date
+  cover     Int // kg DM/ha
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  farm      Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  paddock   Paddock  @relation(fields: [paddockId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation(fields: [createdById], references: [id])
+
+  @@index([farmId, paddockId, date])
+}
+
+model FertilizerType {
+  id            String  @id @default(cuid())
+  name          String  @unique
+  nitrogenPct   Float   @default(0)
+  phosphorusPct Float   @default(0)
+  potassiumPct  Float   @default(0)
+  sulfurPct     Float   @default(0)
+  isPlaceholder Boolean @default(true) // true until real bag/spec-sheet numbers are entered
+}
+
+model ChemicalType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  unit      String   @default("L/ha")
+  createdAt DateTime @default(now())
+}
+
+model SeedVariety {
+  id        String   @id @default(cuid())
+  cropType  String // "Rye grass" | "Maize" | ...
+  name      String
+  createdAt DateTime @default(now())
+
+  @@unique([cropType, name])
+}
+
+enum StockKind {
+  FEED
+  LAND_INPUT
+}
+
+enum StockMode {
+  USE
+  RESTOCK
+}
+
+model StockItem {
+  id       String    @id @default(cuid())
+  kind     StockKind
+  category String? // for LAND_INPUT: "fertilizer" | "chemicals" | "seed"
+  name     String
+  unit     String
+  qty      Float     @default(0)
+  createdAt DateTime @default(now())
+
+  entries StockEntry[]
+}
+
+model StockEntry {
+  id     String    @id @default(cuid())
+  itemId String
+  mode   StockMode
+  qty    Float
+  date   DateTime  @db.Date
+
+  farmId    String?
+  paddockId String?
+
+  // Set when this entry was created by logging Bailing, so editing/deleting
+  // that log can cleanly reverse the stock it added.
+  fieldActivityId String? @unique
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  item          StockItem      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  farm          Farm?          @relation(fields: [farmId], references: [id])
+  paddock       Paddock?       @relation(fields: [paddockId], references: [id])
+  createdBy     User?          @relation(fields: [createdById], references: [id])
+  fieldActivity FieldActivity? @relation(fields: [fieldActivityId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+}
