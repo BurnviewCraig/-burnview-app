@@ -73,6 +73,7 @@ export type StockItem = {
   name: string;
   unit: string;
   qty: number;
+  farmId?: string | null;
 };
 
 export type FertilizerType = {

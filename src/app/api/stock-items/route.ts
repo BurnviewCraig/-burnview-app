@@ -6,8 +6,12 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const kind = searchParams.get("kind");
+  const farmId = searchParams.get("farmId");
   const items = await prisma.stockItem.findMany({
-    where: kind ? { kind: kind as "FEED" | "LAND_INPUT" | "DAIRY" } : undefined,
+    where: {
+      ...(kind ? { kind: kind as "FEED" | "LAND_INPUT" | "DAIRY" } : {}),
+      ...(farmId ? { farmId } : {}),
+    },
     orderBy: { createdAt: "asc" },
   });
   return NextResponse.json({ items });
@@ -15,17 +19,18 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { kind, category, name, unit } = body as {
+  const { kind, category, name, unit, farmId } = body as {
     kind: "FEED" | "LAND_INPUT" | "DAIRY";
     category?: string;
     name: string;
     unit: string;
+    farmId?: string;
   };
   if (!kind || !name?.trim() || !unit) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
   const item = await prisma.stockItem.create({
-    data: { kind, category: category || null, name: name.trim(), unit, qty: 0 },
+    data: { kind, category: category || null, name: name.trim(), unit, qty: 0, farmId: farmId || null },
   });
   return NextResponse.json({ item });
 }

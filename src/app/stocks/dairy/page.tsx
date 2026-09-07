@@ -10,10 +10,15 @@ import { DAIRY_CATEGORIES } from "@/lib/constants";
 import type { Farm, StockItem } from "@/lib/types";
 
 export default function DairyStockPage() {
-  const { data: itemsData, loading, refetch } = useApi<{ items: StockItem[] }>("/api/stock-items?kind=DAIRY");
-  const { data: farmsData } = useApi<{ farms: Farm[] }>("/api/farms");
-  const allItems = itemsData?.items ?? [];
+  const { data: farmsData, loading: farmsLoading } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
+  const [farmId, setFarmId] = useState<string | null>(null);
+  const farm = farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0];
+
+  const { data: itemsData, loading: itemsLoading, refetch } = useApi<{ items: StockItem[] }>(
+    farm ? `/api/stock-items?kind=DAIRY&farmId=${farm.id}` : null
+  );
+  const allItems = itemsData?.items ?? [];
 
   const [category, setCategory] = useState("semen");
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
@@ -25,6 +30,12 @@ export default function DairyStockPage() {
   const items = allItems.filter((i) => i.category === category);
   const activeItem = items.find((i) => i.id === activeItemId) ?? null;
 
+  const switchFarm = (id: string) => {
+    setFarmId(id);
+    setActiveItemId(null);
+    setAdding(false);
+  };
+
   const switchCat = (c: string) => {
     setCategory(c);
     setActiveItemId(null);
@@ -33,18 +44,19 @@ export default function DairyStockPage() {
   };
 
   const handleAdd = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !farm) return;
     await fetch("/api/stock-items", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "DAIRY", category, name: newName.trim(), unit: newUnit }),
+      body: JSON.stringify({ kind: "DAIRY", category, name: newName.trim(), unit: newUnit, farmId: farm.id }),
     });
     setNewName("");
     setAdding(false);
     refetch();
   };
 
-  if (loading) return <div className="screen"><Header title="Dairy" backHref="/stocks" /><Spinner /></div>;
+  if (farmsLoading || itemsLoading) return <div className="screen"><Header title="Dairy" backHref="/stocks" /><Spinner /></div>;
+  if (!farm) return <div className="screen"><Header title="Dairy" backHref="/stocks" /><div className="empty">No farms found.</div></div>;
 
   return (
     <div className="screen">
@@ -53,6 +65,12 @@ export default function DairyStockPage() {
         backHref="/stocks"
         action={<button className="hdr-action" onClick={() => setAdding((a) => !a)}><Plus size={14} strokeWidth={2} />Add item</button>}
       />
+
+      <div className="tabs">
+        {farms.map((f) => (
+          <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => switchFarm(f.id)}>{f.name}</button>
+        ))}
+      </div>
 
       <div className="tabs">
         {DAIRY_CATEGORIES.map((c) => (
@@ -78,7 +96,7 @@ export default function DairyStockPage() {
         {items.length === 0 && (
           <div className="empty">
             <Boxes size={22} strokeWidth={1.5} />
-            <p>No {catName.toLowerCase()} tracked yet — add one above.</p>
+            <p>No {catName.toLowerCase()} tracked yet for {farm.name} — add one above.</p>
           </div>
         )}
         {items.map((item) => (
@@ -92,7 +110,7 @@ export default function DairyStockPage() {
       {activeItem && (
         <StockEntryPanel
           item={activeItem}
-          farms={farms}
+          farms={[farm]}
           showPaddock={false}
           onClose={() => setActiveItemId(null)}
           onSaved={() => { setActiveItemId(null); refetch(); }}

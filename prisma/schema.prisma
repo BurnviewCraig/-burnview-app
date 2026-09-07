@@ -31,6 +31,7 @@ model Farm {
   fieldActivities FieldActivity[]
   pastureWalks    PastureWalk[]
   stockEntries    StockEntry[]
+  stockItems      StockItem[]
   cattleGroups    CattleGroup[]
   grazingAllocations GrazingAllocation[]
 }
@@ -218,11 +219,16 @@ enum StockMode {
 model StockItem {
   id       String    @id @default(cuid())
   kind     StockKind
-  category String? // for LAND_INPUT: "fertilizer" | "chemicals" | "seed"
+  category String? // for LAND_INPUT: "fertilizer" | "chemicals" | "seed"; for DAIRY: "semen" | "meds"
   name     String
   unit     String
   qty      Float     @default(0)
   createdAt DateTime @default(now())
+
+  // Set for DAIRY items — semen/meds are kept as separate stock per farm,
+  // unlike Feed/Land inputs which are one shared pool. Null for those.
+  farmId String?
+  farm   Farm?   @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
   entries StockEntry[]
 }
