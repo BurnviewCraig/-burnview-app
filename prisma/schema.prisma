@@ -263,14 +263,16 @@ model StockEntry {
 enum TimeBookSection {
   DAIRY
   STAFF
+  TOGH
 }
 
-// S = worked (struck), L = leave, A = absent, O = off
+// / = present, L = leave, A = absent, O = off, S = sick
 enum AttendanceCode {
   PRESENT
   LEAVE
   ABSENT
   OFF
+  SICK
 }
 
 model Worker {
@@ -278,6 +280,8 @@ model Worker {
   farmId    String
   section   TimeBookSection
   name      String
+  role      String? // what they do
+  notes     String?
   active    Boolean         @default(true)
   sortOrder Int             @default(0)
   createdAt DateTime        @default(now())

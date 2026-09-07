@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   const entries = await prisma.timeBookEntry.findMany({
     where: {
       date: { gte: new Date(start), lte: new Date(end) },
-      worker: { farmId, section: section as "DAIRY" | "STAFF" },
+      worker: { farmId, section: section as "DAIRY" | "STAFF" | "TOGH" },
     },
   });
   return NextResponse.json({ entries });
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const { workerId, date, code, overtime } = body as {
     workerId?: string;
     date?: string;
-    code?: "PRESENT" | "LEAVE" | "ABSENT" | "OFF" | null;
+    code?: "PRESENT" | "SICK" | "LEAVE" | "ABSENT" | "OFF" | null;
     overtime?: string | null;
   };
   if (!workerId || !date) {

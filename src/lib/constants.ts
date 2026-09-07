@@ -201,10 +201,12 @@ export const DAIRY_CATEGORIES = [
 export const TIMEBOOK_SECTIONS = [
   { id: "DAIRY", name: "Dairy" },
   { id: "STAFF", name: "Staff" },
+  { id: "TOGH", name: "Togh" },
 ] as const;
 
 export const ATTENDANCE_CODES = [
-  { id: "PRESENT", letter: "S", label: "Struck (worked)" },
+  { id: "PRESENT", letter: "/", label: "Present" },
+  { id: "SICK", letter: "S", label: "Sick" },
   { id: "LEAVE", letter: "L", label: "Leave" },
   { id: "ABSENT", letter: "A", label: "Absent" },
   { id: "OFF", letter: "O", label: "Off" },

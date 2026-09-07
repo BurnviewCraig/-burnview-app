@@ -129,8 +129,10 @@ export type GrazingAllocation = {
 export type Worker = {
   id: string;
   farmId: string;
-  section: "DAIRY" | "STAFF";
+  section: "DAIRY" | "STAFF" | "TOGH";
   name: string;
+  role: string | null;
+  notes: string | null;
   active: boolean;
   sortOrder: number;
 };
@@ -139,6 +141,6 @@ export type TimeBookEntry = {
   id: string;
   workerId: string;
   date: string;
-  code: "PRESENT" | "LEAVE" | "ABSENT" | "OFF" | null;
+  code: "PRESENT" | "SICK" | "LEAVE" | "ABSENT" | "OFF" | null;
   overtime: string | null;
 };
