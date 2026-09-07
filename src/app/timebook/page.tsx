@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Plus, Printer, RotateCcw, Trash2, X } from "lucide-react";
+import { CheckSquare, ChevronLeft, ChevronRight, Plus, Printer, RotateCcw, Trash2, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
@@ -71,6 +71,11 @@ export default function TimeBookPage() {
   const [newRole, setNewRole] = useState("");
   const [showRemoved, setShowRemoved] = useState(false);
 
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDate, setBulkDate] = useState(today);
+  const [markingPresent, setMarkingPresent] = useState(false);
+
   const [printFrom, setPrintFrom] = useState(anchor);
   const [printTo, setPrintTo] = useState(days[6]);
   const [printData, setPrintData] = useState<{ from: string; to: string; entries: TimeBookEntry[] } | null>(null);
@@ -126,6 +131,38 @@ export default function TimeBookPage() {
     setCellTarget({ workerId: w.id, workerName: w.name, date, code: existing?.code ?? null, overtime: existing?.overtime ?? null });
   };
 
+  const toggleSelectMode = () => {
+    setSelectMode((v) => !v);
+    setSelectedIds(new Set());
+    setAdding(false);
+    setShowRemoved(false);
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleMarkPresent = async () => {
+    if (selectedIds.size === 0 || !bulkDate) return;
+    setMarkingPresent(true);
+    await Promise.all(
+      Array.from(selectedIds).map((workerId) =>
+        fetch("/api/timebook-entries", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workerId, date: bulkDate, code: "PRESENT", overtime: null }),
+        })
+      )
+    );
+    setMarkingPresent(false);
+    setSelectedIds(new Set());
+    refetchEntries();
+  };
+
   const handleAddWorker = async () => {
     if (!farm || !newName.trim()) return;
     await fetch("/api/workers", {
@@ -175,6 +212,9 @@ export default function TimeBookPage() {
         <button className="link-btn" onClick={() => setAnchor(mondayOf(today))}>This week</button>
         <button className="map-zoom-btn" onClick={() => setAnchor(addDays(anchor, 7))} aria-label="Next week"><ChevronRight size={16} /></button>
         <div style={{ flex: 1 }} />
+        <button className={`link-btn${selectMode ? " active-link" : ""}`} onClick={toggleSelectMode}>
+          <CheckSquare size={14} style={{ verticalAlign: "-2px" }} /> {selectMode ? "Done selecting" : "Select multiple"}
+        </button>
         <button className="link-btn" onClick={() => { setAdding((v) => !v); setShowRemoved(false); }}>
           <Plus size={14} style={{ verticalAlign: "-2px" }} /> Add worker
         </button>
@@ -182,6 +222,21 @@ export default function TimeBookPage() {
           <RotateCcw size={14} style={{ verticalAlign: "-2px" }} /> Removed
         </button>
       </div>
+
+      {selectMode && (
+        <div className="add-item-bar no-print" style={{ flexWrap: "wrap" }}>
+          <span className="field-label" style={{ width: "100%" }}>
+            Tap names in the table to select them — {selectedIds.size} selected
+          </span>
+          <input className="field-input small" type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} />
+          <button className="save-btn small" onClick={handleMarkPresent} disabled={selectedIds.size === 0 || markingPresent}>
+            {markingPresent ? "Marking…" : "Mark present"}
+          </button>
+          {selectedIds.size > 0 && (
+            <button className="link-btn" onClick={() => setSelectedIds(new Set())}>Clear</button>
+          )}
+        </div>
+      )}
 
       <div className="add-item-bar no-print" style={{ flexWrap: "wrap" }}>
         <span className="field-label" style={{ width: "100%" }}>Print range</span>
@@ -236,7 +291,11 @@ export default function TimeBookPage() {
             <tbody>
               {workers.map((w) => (
                 <tr key={w.id}>
-                  <td className="grazing-table-label timebook-name" onClick={() => setManagingWorker(w)}>
+                  <td
+                    className={`grazing-table-label timebook-name${selectMode && selectedIds.has(w.id) ? " selected" : ""}`}
+                    onClick={() => (selectMode ? toggleSelected(w.id) : setManagingWorker(w))}
+                  >
+                    {selectMode && <span className={`timebook-checkbox${selectedIds.has(w.id) ? " checked" : ""}`} />}
                     {w.name}
                     {w.role && <span className="timebook-role">{w.role}</span>}
                   </td>
@@ -308,7 +367,8 @@ export default function TimeBookPage() {
         <WorkerManager
           worker={managingWorker}
           onClose={() => setManagingWorker(null)}
-          onChanged={() => { setManagingWorker(null); refetchWorkers(); }}
+          onChanged={() => { setManagingWorker(null); refetchWorkers(); refetchEntries(); }}
+          onLeaveApplied={refetchEntries}
         />
       )}
     </div>
@@ -381,12 +441,48 @@ function CellEditor({ target, onClose, onSaved }: { target: CellTarget; onClose:
   );
 }
 
-function WorkerManager({ worker, onClose, onChanged }: { worker: Worker; onClose: () => void; onChanged: () => void }) {
+function WorkerManager({
+  worker,
+  onClose,
+  onChanged,
+  onLeaveApplied,
+}: {
+  worker: Worker;
+  onClose: () => void;
+  onChanged: () => void;
+  onLeaveApplied: () => void;
+}) {
   const [name, setName] = useState(worker.name);
   const [role, setRole] = useState(worker.role ?? "");
   const [notes, setNotes] = useState(worker.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
+
+  const [leaveFrom, setLeaveFrom] = useState("");
+  const [leaveTo, setLeaveTo] = useState("");
+  const [applyingLeave, setApplyingLeave] = useState(false);
+  const [leaveApplied, setLeaveApplied] = useState(false);
+
+  const handleApplyLeave = async () => {
+    if (!leaveFrom || !leaveTo || leaveFrom > leaveTo) return;
+    setApplyingLeave(true);
+    setLeaveApplied(false);
+    const dates = daysBetween(leaveFrom, leaveTo);
+    await Promise.all(
+      dates.map((date) =>
+        fetch("/api/timebook-entries", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workerId: worker.id, date, code: "LEAVE", overtime: null }),
+        })
+      )
+    );
+    setApplyingLeave(false);
+    setLeaveApplied(true);
+    setLeaveFrom("");
+    setLeaveTo("");
+    onLeaveApplied();
+  };
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -434,6 +530,23 @@ function WorkerManager({ worker, onClose, onChanged }: { worker: Worker; onClose
           <span className="field-label">Notes</span>
           <textarea className="field-input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
+
+        <div className="field" style={{ marginTop: 4 }}>
+          <span className="field-label">Mark leave for a date range</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input className="field-input small" type="date" value={leaveFrom} onChange={(e) => { setLeaveFrom(e.target.value); setLeaveApplied(false); }} />
+            <span>to</span>
+            <input className="field-input small" type="date" value={leaveTo} onChange={(e) => { setLeaveTo(e.target.value); setLeaveApplied(false); }} />
+            <button
+              className="save-btn small"
+              onClick={handleApplyLeave}
+              disabled={!leaveFrom || !leaveTo || leaveFrom > leaveTo || applyingLeave}
+            >
+              {applyingLeave ? "Marking…" : "Mark leave"}
+            </button>
+          </div>
+          {leaveApplied && <p className="ds-note" style={{ marginTop: 6 }}>Leave marked.</p>}
+        </div>
 
         <div className="edit-entry-actions" style={{ marginTop: 14 }}>
           <button className="save-btn" onClick={handleSave} disabled={saving || !name.trim()}>{saving ? "Saving…" : "Save"}</button>

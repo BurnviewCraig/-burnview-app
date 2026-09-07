@@ -177,6 +177,13 @@ a:visited { color: var(--ink); }
 .timebook-cell { min-width: 60px; }
 .timebook-code { font-weight: 700; font-size: 14px; }
 .timebook-overtime { display: block; font-size: 10px; color: var(--ink-soft); }
+.timebook-checkbox { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--ink-soft); border-radius: 3px; }
+.timebook-checkbox.checked { background: var(--normal); border-color: var(--normal); }
+.timebook-name.selected { background: var(--normal); color: var(--paper); }
+.timebook-name.selected .timebook-role { color: var(--paper); opacity: .8; }
+.timebook-name.selected .timebook-checkbox { border-color: var(--paper); }
+.timebook-name.selected .timebook-checkbox.checked { background: var(--paper); }
+.link-btn.active-link { color: var(--ink); text-decoration: underline; }
 .timebook-title-print { display: none; }
 .print-only { display: none; }
 
