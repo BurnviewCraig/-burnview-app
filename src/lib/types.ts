@@ -125,3 +125,20 @@ export type GrazingAllocation = {
   group: { name: string };
   count?: number | null;
 };
+
+export type Worker = {
+  id: string;
+  farmId: string;
+  section: "DAIRY" | "STAFF";
+  name: string;
+  active: boolean;
+  sortOrder: number;
+};
+
+export type TimeBookEntry = {
+  id: string;
+  workerId: string;
+  date: string;
+  code: "PRESENT" | "LEAVE" | "ABSENT" | "OFF" | null;
+  overtime: string | null;
+};

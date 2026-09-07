@@ -34,6 +34,7 @@ model Farm {
   stockItems      StockItem[]
   cattleGroups    CattleGroup[]
   grazingAllocations GrazingAllocation[]
+  workers         Worker[]
 }
 
 model Paddock {
@@ -257,4 +258,44 @@ model StockEntry {
   fieldActivity FieldActivity? @relation(fields: [fieldActivityId], references: [id], onDelete: Cascade)
 
   @@index([itemId])
+}
+
+enum TimeBookSection {
+  DAIRY
+  STAFF
+}
+
+// S = worked (struck), L = leave, A = absent, O = off
+enum AttendanceCode {
+  PRESENT
+  LEAVE
+  ABSENT
+  OFF
+}
+
+model Worker {
+  id        String          @id @default(cuid())
+  farmId    String
+  section   TimeBookSection
+  name      String
+  active    Boolean         @default(true)
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+
+  farm    Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  entries TimeBookEntry[]
+
+  @@index([farmId, section])
+}
+
+model TimeBookEntry {
+  id       String          @id @default(cuid())
+  workerId String
+  date     DateTime        @db.Date
+  code     AttendanceCode?
+  overtime String? // free-text note, e.g. "+2" or "-1.5"
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, date])
 }

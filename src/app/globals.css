@@ -170,6 +170,21 @@ a:visited { color: var(--ink); }
 .grazing-table-session { font-size: 10.5px; color: var(--ink-soft); width: 46px; background: var(--card); }
 .grazing-table-cell { cursor: pointer; font-weight: 600; }
 .grazing-table-cell:hover { background: var(--paper-deep); }
+
+.timebook-table { min-width: 640px; }
+.timebook-name { text-align: left; cursor: pointer; width: 110px; }
+.timebook-cell { min-width: 60px; }
+.timebook-code { font-weight: 700; font-size: 14px; }
+.timebook-overtime { display: block; font-size: 10px; color: var(--ink-soft); }
+.timebook-title-print { display: none; }
+
+@media print {
+  .no-print { display: none !important; }
+  .timebook-title-print { display: block; font-weight: 700; margin: 8px 18px 4px; }
+  .app-shell { height: auto; max-width: none; border: none; overflow: visible; }
+  .screen { overflow: visible; }
+  .grazing-table-scroll { overflow: visible; }
+}
 .form { padding: 18px; display:flex; flex-direction:column; gap: 16px; flex-shrink: 0; }
 
 .paddock-picker-head { display:flex; align-items:center; justify-content:space-between; padding: 0 18px 8px; }

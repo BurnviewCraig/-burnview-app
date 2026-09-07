@@ -198,4 +198,20 @@ export const DAIRY_CATEGORIES = [
   { id: "meds", name: "Meds" },
 ];
 
+export const TIMEBOOK_SECTIONS = [
+  { id: "DAIRY", name: "Dairy" },
+  { id: "STAFF", name: "Staff" },
+] as const;
+
+export const ATTENDANCE_CODES = [
+  { id: "PRESENT", letter: "S", label: "Struck (worked)" },
+  { id: "LEAVE", letter: "L", label: "Leave" },
+  { id: "ABSENT", letter: "A", label: "Absent" },
+  { id: "OFF", letter: "O", label: "Off" },
+] as const;
+
+export const ATTENDANCE_LETTER: Record<string, string> = Object.fromEntries(
+  ATTENDANCE_CODES.map((c) => [c.id, c.letter])
+);
+
 export const KEYPAD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"];

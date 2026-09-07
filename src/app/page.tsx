@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Milk, Beef, Wheat, Boxes, Settings, LogOut, Map as MapIcon, CalendarDays } from "lucide-react";
+import { Milk, Beef, Wheat, Boxes, Settings, LogOut, Map as MapIcon, CalendarDays, ClipboardList } from "lucide-react";
 import { useMemo } from "react";
 import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
@@ -97,6 +97,11 @@ export default function HomePage() {
           <Boxes size={30} strokeWidth={1.5} />
           <span className="hc-title">Stocks</span>
           <span className="hc-sub">Fertilizer, diesel &amp; inputs</span>
+        </Link>
+        <Link className="home-card" href="/timebook">
+          <ClipboardList size={30} strokeWidth={1.5} />
+          <span className="hc-title">Time book</span>
+          <span className="hc-sub">Weekly attendance per farm</span>
         </Link>
       </div>
     </div>
