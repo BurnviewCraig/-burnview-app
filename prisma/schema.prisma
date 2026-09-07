@@ -207,6 +207,7 @@ model SeedVariety {
 enum StockKind {
   FEED
   LAND_INPUT
+  DAIRY
 }
 
 enum StockMode {

@@ -193,4 +193,9 @@ export const LAND_CATEGORIES = [
   { id: "seed", name: "Seed" },
 ];
 
+export const DAIRY_CATEGORIES = [
+  { id: "semen", name: "Semen" },
+  { id: "meds", name: "Meds" },
+];
+
 export const KEYPAD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"];

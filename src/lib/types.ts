@@ -68,7 +68,7 @@ export type WedgeFarm = {
 
 export type StockItem = {
   id: string;
-  kind: "FEED" | "LAND_INPUT";
+  kind: "FEED" | "LAND_INPUT" | "DAIRY";
   category: string | null;
   name: string;
   unit: string;
