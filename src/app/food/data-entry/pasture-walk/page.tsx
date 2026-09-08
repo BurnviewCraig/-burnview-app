@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
@@ -9,12 +10,15 @@ import { useApi } from "@/lib/useApi";
 import { byPaddockNumber, todayStr } from "@/lib/utils";
 import type { Farm, PastureWalk } from "@/lib/types";
 
-export default function PastureWalkPage() {
+function PastureWalkForm() {
+  const params = useSearchParams();
   const { data, loading } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = data?.farms ?? [];
 
-  const [farmId, setFarmId] = useState<string | null>(null);
-  const [date, setDate] = useState(todayStr());
+  // A calendar "{Farm} Pasture walk" entry links here with these set, so
+  // clicking it opens straight to that day's sheet instead of today's.
+  const [farmId, setFarmId] = useState<string | null>(params.get("farmId"));
+  const [date, setDate] = useState(params.get("date") || todayStr());
   const [readings, setReadings] = useState<Record<string, string>>({});
   const [originalReadings, setOriginalReadings] = useState<Record<string, string>>({});
   const [existingIds, setExistingIds] = useState<Record<string, string>>({});
@@ -201,5 +205,13 @@ export default function PastureWalkPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PastureWalkPage() {
+  return (
+    <Suspense fallback={<div className="screen"><Header title="Pasture walk" backHref="/food/data-entry" /><Spinner /></div>}>
+      <PastureWalkForm />
+    </Suspense>
   );
 }

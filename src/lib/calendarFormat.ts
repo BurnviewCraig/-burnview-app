@@ -15,10 +15,22 @@ export type RawActivity = {
 };
 export type RawWalk = {
   id: string;
+  farmId: string;
   date: string;
   cover: number;
   paddock: { code: string; sizeHa: number | null };
   farm: { name: string };
+};
+
+// One walk sheet (a farm's whole day of pasture-walk readings) collapsed
+// into a single calendar entry — showing 20-30 individual paddock readings
+// per day was too much clutter. Click through to the pasture walk screen
+// (pre-loaded to that farm + date) to see or edit the actual readings.
+export type WalkGroup = {
+  farmId: string;
+  farmName: string;
+  date: string;
+  count: number;
 };
 
 export type RawGrazing = {
@@ -35,9 +47,10 @@ export type CalendarEvent = {
   id: string;
   farmName: string;
   label: string;
-  raw: RawActivity | RawWalk | RawGrazing;
+  raw: RawActivity | WalkGroup | RawGrazing;
   isWalk: boolean;
   isGrazing?: boolean;
+  isWalkGroup?: boolean;
 };
 
 export const TYPE_LABEL: Record<string, string> = {
@@ -72,8 +85,8 @@ export function activityLabel(a: RawActivity): string {
   }
 }
 
-export function walkLabel(w: RawWalk): string {
-  return `Pasture walk — ${w.cover} kg DM/ha — ${w.paddock.code}`;
+export function walkGroupLabel(g: WalkGroup): string {
+  return `${g.farmName} Pasture walk`;
 }
 
 // "A (510) — R49 Day, Night" when day/night share a camp, or
@@ -95,7 +108,23 @@ export function eventsFromCalendarData(
   data: { activities: RawActivity[]; walks: RawWalk[]; grazing?: RawGrazing[] } | null
 ): CalendarEvent[] {
   const acts = (data?.activities ?? []).map((a) => ({ id: a.id, farmName: a.farm.name, label: activityLabel(a), raw: a, isWalk: false }));
-  const walks = (data?.walks ?? []).map((w) => ({ id: w.id, farmName: w.farm.name, label: walkLabel(w), raw: w, isWalk: true }));
+
+  const walkGroups = new Map<string, WalkGroup>();
+  (data?.walks ?? []).forEach((w) => {
+    const date = w.date.slice(0, 10);
+    const key = `${w.farmId}|${date}`;
+    const existing = walkGroups.get(key);
+    if (existing) existing.count += 1;
+    else walkGroups.set(key, { farmId: w.farmId, farmName: w.farm.name, date, count: 1 });
+  });
+  const walks: CalendarEvent[] = [...walkGroups.values()].map((g) => ({
+    id: `walk-${g.farmId}-${g.date}`,
+    farmName: g.farmName,
+    label: walkGroupLabel(g),
+    raw: g,
+    isWalk: true,
+    isWalkGroup: true,
+  }));
   const grazing = (data?.grazing ?? []).map((g) => ({
     id: `grazing-${g.groupId}-${g.date}`,
     farmName: g.farmName,

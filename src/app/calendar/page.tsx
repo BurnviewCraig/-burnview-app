@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Pencil, CheckSquare, Square, Trash2 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
@@ -8,10 +9,11 @@ import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { EditEntryPanel, type EditableEntry } from "@/components/EditEntryPanel";
 import { BulkEditPanel } from "@/components/BulkEditPanel";
-import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type CalendarEvent } from "@/lib/calendarFormat";
+import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type WalkGroup, type CalendarEvent } from "@/lib/calendarFormat";
 import type { Farm } from "@/lib/types";
 
 export default function CalendarPage() {
+  const router = useRouter();
   const { data: farmsData } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
 
@@ -41,10 +43,9 @@ export default function CalendarPage() {
 
   const openEdit = (e: CalendarEvent) => {
     if (e.isGrazing) return; // shown for reference here — edit/delete from Cattle or Grazing allocation
-    if (e.isWalk) {
-      const w = e.raw as RawWalk;
-      setEditingEntry({ kind: "walk", id: w.id, date: w.date, cover: w.cover });
-      setEditingPaddock({ code: w.paddock.code, sizeHa: w.paddock.sizeHa });
+    if (e.isWalkGroup) {
+      const g = e.raw as WalkGroup;
+      router.push(`/food/data-entry/pasture-walk?farmId=${g.farmId}&date=${g.date}`);
     } else {
       const a = e.raw as RawActivity;
       setEditingEntry({
@@ -110,6 +111,7 @@ export default function CalendarPage() {
 
   const handleEventClick = (e: CalendarEvent) => {
     if (e.isGrazing) return;
+    if (e.isWalkGroup) { if (!selectMode) openEdit(e); return; } // a whole day's sheet, not a single selectable/deletable row
     if (selectMode) toggleSelected(e.id);
     else openEdit(e);
   };
@@ -158,14 +160,15 @@ export default function CalendarPage() {
                     {events.length === 0 && <span className="calendar-empty">Nothing logged</span>}
                     {events.map((e) => {
                       const isSelected = selectedIds.has(e.id);
-                      const clickable = !e.isGrazing;
+                      const selectable = !e.isGrazing && !e.isWalkGroup;
+                      const clickable = !e.isGrazing && !(e.isWalkGroup && selectMode);
                       return (
                         <div
                           key={e.id}
                           className={`calendar-event${clickable ? " clickable" : ""}${isSelected ? " selected" : ""}`}
                           onClick={clickable ? () => handleEventClick(e) : undefined}
                         >
-                          {clickable && selectMode && (isSelected ? <CheckSquare size={13} className="calendar-event-check" /> : <Square size={13} className="calendar-event-check" />)}
+                          {selectable && selectMode && (isSelected ? <CheckSquare size={13} className="calendar-event-check" /> : <Square size={13} className="calendar-event-check" />)}
                           {farmId === "all" && <span className="calendar-event-farm">{e.farmName}</span>}
                           {e.label}
                           {clickable && !selectMode && <Pencil size={12} strokeWidth={1.75} className="hr-edit-icon" />}
