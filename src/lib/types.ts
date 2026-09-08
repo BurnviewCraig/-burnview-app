@@ -68,6 +68,7 @@ export type WedgeFarm = {
 
 export type OrderNumber = {
   id: string;
+  prefix: string;
   number: number;
   company: string | null;
   item: string | null;

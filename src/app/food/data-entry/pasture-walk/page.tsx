@@ -7,7 +7,7 @@ import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { KeypadGrid } from "@/components/KeypadGrid";
 import { useApi } from "@/lib/useApi";
-import { byPaddockNumber, todayStr } from "@/lib/utils";
+import { byPaddockNumber, isMeasuredRyeGrass, todayStr } from "@/lib/utils";
 import type { Farm, PastureWalk } from "@/lib/types";
 
 function PastureWalkForm() {
@@ -27,9 +27,10 @@ function PastureWalkForm() {
   const [saving, setSaving] = useState(false);
 
   const farm = farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0];
-  // Only Rye grass camps get walked for the wedge — other land types aren't read.
+  // Only Rye grass camps get walked for the wedge — other land types aren't
+  // read, and GR (Glenroy heifer) camps are Rye grass but not measured either.
   const orderedPaddocks = useMemo(
-    () => (farm ? farm.paddocks.filter((p) => p.landType === "Rye grass").sort(byPaddockNumber) : []),
+    () => (farm ? farm.paddocks.filter(isMeasuredRyeGrass).sort(byPaddockNumber) : []),
     [farm]
   );
 

@@ -217,3 +217,11 @@ export const ATTENDANCE_LETTER: Record<string, string> = Object.fromEntries(
 );
 
 export const KEYPAD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"];
+
+// Who can raise an order number, and their prefix — each person's numbers
+// run independently (CS1, CS2… / HS1, HS2… / TS1, TS2…).
+export const ORDER_NUMBER_ISSUERS = [
+  { name: "Craig", prefix: "CS" },
+  { name: "Hayden", prefix: "HS" },
+  { name: "Thomas", prefix: "TS" },
+] as const;

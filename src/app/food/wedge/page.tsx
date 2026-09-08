@@ -9,7 +9,7 @@ import {
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
-import { todayStr } from "@/lib/utils";
+import { isMeasuredRyeGrass, todayStr } from "@/lib/utils";
 import { COLORS } from "@/lib/constants";
 import type { WedgeFarm, WedgePaddock } from "@/lib/types";
 
@@ -93,7 +93,7 @@ export default function FarmWedgePage() {
   const farmsWithStats = useMemo(
     () =>
       farms.map((f) => {
-        const rye = f.paddocks.filter((p) => p.landType === "Rye grass");
+        const rye = f.paddocks.filter(isMeasuredRyeGrass);
         const withData = rye.filter((p) => p.hasData);
         const avgCover = withData.length
           ? Math.round(withData.reduce((s, p) => s + (p.cover ?? 0), 0) / withData.length)
@@ -125,7 +125,7 @@ export default function FarmWedgePage() {
   // every paddock (the map needs the rest), so filter down to it here.
   const sorted: Row[] = useMemo(() => {
     if (!current) return [];
-    const wedgePaddocks = current.paddocks.filter((p) => p.landType === "Rye grass");
+    const wedgePaddocks = current.paddocks.filter(isMeasuredRyeGrass);
     const withData = wedgePaddocks.filter((p) => p.hasData).sort((a, b) => (a.cover ?? 0) - (b.cover ?? 0));
     const noData = wedgePaddocks.filter((p) => !p.hasData);
     const combined = [...noData, ...withData];

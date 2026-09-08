@@ -306,12 +306,17 @@ model TimeBookEntry {
   @@unique([workerId, date])
 }
 
-// number is a plain sequential integer (1, 2, 3…) — displayed as "CS{number}".
-// A row is created blank (just the number) the moment "New order number" is
-// clicked, then company/farm/item/comment are filled in and saved after.
+// prefix identifies who's raising the order — "CS" (Craig), "HS" (Hayden),
+// "TS" (Thomas), see ORDER_NUMBER_ISSUERS in lib/constants.ts — and number
+// is sequential per prefix (CS1, CS2… / HS1, HS2… independently), computed
+// at creation time rather than a DB autoincrement since it must reset per
+// prefix. A row is created blank (just prefix + number) the moment a name
+// is picked from "New order number", then company/farm/item/comment are
+// filled in and saved after.
 model OrderNumber {
   id      String  @id @default(cuid())
-  number  Int     @default(autoincrement())
+  prefix  String  @default("CS")
+  number  Int
   company String?
   item    String? // what it should be itemised under, e.g. "Irrigation"
   comment String? // explanation, e.g. "Replacement drag line"
@@ -322,4 +327,6 @@ model OrderNumber {
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
+
+  @@unique([prefix, number])
 }

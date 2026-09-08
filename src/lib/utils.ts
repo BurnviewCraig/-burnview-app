@@ -18,6 +18,14 @@ export function byPaddockNumber<T extends { code: string }>(a: T, b: T) {
   return pa.num - pb.num;
 }
 
+// Rye grass camps that actually get walked and go on the wedge — excludes
+// the "GR" (Glenroy) heifer camps, which are Rye grass too but aren't
+// measured. Used by both the pasture walk data-entry list and the wedge
+// chart; the map and other data entry still show every paddock.
+export function isMeasuredRyeGrass(p: { landType: string | null; code: string }): boolean {
+  return p.landType === "Rye grass" && !p.code.toUpperCase().startsWith("GR");
+}
+
 export function slugify(s: string) {
   return s.toLowerCase().trim().replace(/\s+/g, "-");
 }
