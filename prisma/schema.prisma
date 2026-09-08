@@ -19,6 +19,7 @@ model User {
   stockEntries    StockEntry[]
   grazingAllocations GrazingAllocation[]
   cattleCountEntries CattleCountEntry[]
+  orderNumbers    OrderNumber[]
 }
 
 model Farm {
@@ -35,6 +36,7 @@ model Farm {
   cattleGroups    CattleGroup[]
   grazingAllocations GrazingAllocation[]
   workers         Worker[]
+  orderNumbers    OrderNumber[]
 }
 
 model Paddock {
@@ -302,4 +304,22 @@ model TimeBookEntry {
   worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@unique([workerId, date])
+}
+
+// number is a plain sequential integer (1, 2, 3…) — displayed as "CS{number}".
+// A row is created blank (just the number) the moment "New order number" is
+// clicked, then company/farm/item/comment are filled in and saved after.
+model OrderNumber {
+  id      String  @id @default(cuid())
+  number  Int     @default(autoincrement())
+  company String?
+  item    String? // what it should be itemised under, e.g. "Irrigation"
+  comment String? // explanation, e.g. "Replacement drag line"
+
+  farmId String?
+  farm   Farm?   @relation(fields: [farmId], references: [id])
+
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
 }

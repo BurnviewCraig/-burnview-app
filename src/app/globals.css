@@ -103,7 +103,9 @@ a:visited { color: var(--ink); }
 .farm-detail { padding: 14px 18px; overflow-y:auto; flex:1; }
 .fd-summary { display:flex; gap: 18px; margin-bottom: 14px; }
 
+.wedge-header-row { display:flex; justify-content: flex-end; margin-bottom: 4px; }
 .wedge-chart-scroll { overflow-x: auto; padding-bottom: 4px; }
+.wedge-print { margin-top: 6px; }
 .wedge-axis-labels { display:flex; }
 .wedge-axis-label { font-size: 8px; color: var(--ink-soft); writing-mode: vertical-rl; transform: rotate(180deg); text-align:left; white-space:nowrap; cursor:pointer; padding-top: 2px; }
 .wedge-axis-label.flagged { color: var(--flagged); font-weight: 600; }

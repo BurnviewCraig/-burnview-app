@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Non-destructive history counts for a paddock — used to preview what a
+// (bulk) delete would take with it before anything is actually deleted.
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const [activities, walks, grazing] = await Promise.all([
+    prisma.fieldActivity.count({ where: { paddockId: id } }),
+    prisma.pastureWalk.count({ where: { paddockId: id } }),
+    prisma.grazingAllocation.count({ where: { paddockId: id } }),
+  ]);
+  return NextResponse.json({ activities, walks, grazing });
+}
+
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();

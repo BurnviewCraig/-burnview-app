@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { X, UploadCloud, Plus, Trash2, ClipboardList } from "lucide-react";
+import { X, UploadCloud, Plus, Trash2, ClipboardList, CheckSquare } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
@@ -26,6 +26,12 @@ export default function FieldEditorPage() {
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkChecking, setBulkChecking] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState<{ activities: number; walks: number; grazing: number; withHistory: number } | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   const farm = farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0];
   const orderedPaddocks = useMemo(
     () => (farm ? [...farm.paddocks].sort(byPaddockNumber) : []),
@@ -36,6 +42,56 @@ export default function FieldEditorPage() {
     setFarmId(id);
     setActive(null);
     setAdding(false);
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setBulkConfirm(null);
+  };
+
+  const toggleSelectMode = () => {
+    setSelectMode((v) => !v);
+    setSelectedIds(new Set());
+    setBulkConfirm(null);
+    setActive(null);
+    setAdding(false);
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDeleteClick = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkChecking(true);
+    const counts = await Promise.all(
+      Array.from(selectedIds).map((id) => fetch(`/api/paddocks/${id}`).then((r) => r.json()))
+    );
+    setBulkChecking(false);
+    const totals = counts.reduce(
+      (acc, c) => ({
+        activities: acc.activities + (c.activities ?? 0),
+        walks: acc.walks + (c.walks ?? 0),
+        grazing: acc.grazing + (c.grazing ?? 0),
+        withHistory: acc.withHistory + (c.activities || c.walks || c.grazing ? 1 : 0),
+      }),
+      { activities: 0, walks: 0, grazing: 0, withHistory: 0 }
+    );
+    setBulkConfirm(totals);
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    setBulkDeleting(true);
+    await Promise.all(
+      Array.from(selectedIds).map((id) => fetch(`/api/paddocks/${id}?force=true`, { method: "DELETE" }))
+    );
+    setBulkDeleting(false);
+    setSelectedIds(new Set());
+    setBulkConfirm(null);
+    setSelectMode(false);
+    refetch();
   };
 
   const openField = (p: Paddock) => {
@@ -136,18 +192,26 @@ export default function FieldEditorPage() {
             Full field history
           </Link>
         </div>
-        <button
-          className="link-btn"
-          onClick={() => {
-            setActive(null);
-            setAdding((v) => !v);
-            setAddError(null);
-            setNewCode("");
-          }}
-        >
-          <Plus size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-          Add field
-        </button>
+        <div style={{ display: "flex", gap: 14 }}>
+          <button className={`link-btn${selectMode ? " active-link" : ""}`} onClick={toggleSelectMode}>
+            <CheckSquare size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+            {selectMode ? "Done selecting" : "Select multiple"}
+          </button>
+          <button
+            className="link-btn"
+            onClick={() => {
+              setActive(null);
+              setSelectMode(false);
+              setSelectedIds(new Set());
+              setAdding((v) => !v);
+              setAddError(null);
+              setNewCode("");
+            }}
+          >
+            <Plus size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+            Add field
+          </button>
+        </div>
       </div>
 
       {adding && (
@@ -183,14 +247,47 @@ export default function FieldEditorPage() {
         ))}
       </div>
 
-      <div className="walk-list" style={{ paddingBottom: active ? 260 : 0 }}>
+      <div className="walk-list" style={{ paddingBottom: active ? 260 : selectMode ? (bulkConfirm ? 180 : 90) : 0 }}>
         {orderedPaddocks.map((p) => (
-          <button key={p.id} className={`walk-row${active?.id === p.id ? " active" : ""}`} onClick={() => openField(p)}>
+          <button
+            key={p.id}
+            className={`walk-row${selectMode ? (selectedIds.has(p.id) ? " active" : "") : active?.id === p.id ? " active" : ""}`}
+            onClick={() => (selectMode ? toggleSelected(p.id) : openField(p))}
+          >
+            {selectMode && <span className={`timebook-checkbox${selectedIds.has(p.id) ? " checked" : ""}`} />}
             <span className="wr-code">{p.code}</span>
             <span className="field-editor-sub">{p.sizeHa ? `${p.sizeHa} ha` : "No size set"} · {p.landType || "Unclassified"}</span>
           </button>
         ))}
       </div>
+
+      {selectMode && (
+        <div className="walk-save-bar">
+          {!bulkConfirm ? (
+            <div className="walk-save-row">
+              <button className="cancel-btn" onClick={toggleSelectMode}>Done</button>
+              <button className="delete-btn" onClick={handleBulkDeleteClick} disabled={selectedIds.size === 0 || bulkChecking}>
+                <Trash2 size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                {bulkChecking ? "Checking…" : `Delete ${selectedIds.size} selected`}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p className="error-note">
+                {bulkConfirm.withHistory > 0
+                  ? `${bulkConfirm.withHistory} of these ${selectedIds.size} fields have logged history (${bulkConfirm.activities} activities, ${bulkConfirm.walks} pasture walks, ${bulkConfirm.grazing} grazing entries total) — deleting will remove that history too.`
+                  : `Delete ${selectedIds.size} field${selectedIds.size === 1 ? "" : "s"}? This can't be undone.`}
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="delete-btn" onClick={handleBulkDeleteConfirm} disabled={bulkDeleting}>
+                  {bulkDeleting ? "Deleting…" : `Yes, delete ${selectedIds.size} field${selectedIds.size === 1 ? "" : "s"}`}
+                </button>
+                <button className="link-btn" onClick={() => setBulkConfirm(null)}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {active && (
         <div className="keypad-panel">

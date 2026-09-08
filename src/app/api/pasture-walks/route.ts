@@ -8,11 +8,13 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const paddockId = searchParams.get("paddockId");
   const farmId = searchParams.get("farmId");
+  const date = searchParams.get("date");
 
   const walks = await prisma.pastureWalk.findMany({
     where: {
       ...(paddockId ? { paddockId } : {}),
       ...(farmId ? { farmId } : {}),
+      ...(date ? { date: new Date(date) } : {}),
     },
     orderBy: { date: "desc" },
   });

@@ -4,12 +4,20 @@ import { daysBetween } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-// Computes real wedge figures from actual pasture-walk data — no synthetic
-// per-paddock covers. A paddock with no walk yet shows as "no data" rather
-// than a guessed number. Growth is a simple (latest - previous) / days
-// estimate between a paddock's two most recent walks; it doesn't account for
-// grazing/defoliation since herd movements aren't tracked yet (Cattle isn't
-// built), so treat it as directional, not precise DM production.
+// Returns every paddock (any land type) with boundary + latest walk/mulch
+// info, and farm-level paddockCount/noDataCount/avgCover/avgGrowth summed
+// across ALL of them — this feeds the farm map as well as the wedge, so
+// nothing here is scoped down to one land type (the wedge page itself
+// narrows to Rye grass client-side; see food/wedge/page.tsx). Growth is a
+// simple (latest - previous) / days estimate between a paddock's two most
+// recent walks; it doesn't account for grazing/defoliation since herd
+// movements aren't tracked yet (Cattle isn't built), so treat it as
+// directional, not precise DM production.
+//
+// A cover of 0 means "not walked" rather than a real reading. That paddock
+// still gets a spot on the wedge (as a flagged no-data bar, same as a
+// paddock that's never been walked at all) — it just doesn't count toward
+// avgCover/avgGrowth, and growth isn't computed off of it.
 export async function GET() {
   const farms = await prisma.farm.findMany({
     orderBy: { sortOrder: "asc" },
@@ -32,10 +40,10 @@ export async function GET() {
   const result = farms.map((farm) => {
     const paddocks = farm.paddocks.map((p) => {
       const [latest, prev] = p.pastureWalks;
-      const cover = latest ? latest.cover : null;
-      const hasData = latest != null;
+      const hasData = latest != null && latest.cover > 0;
+      const cover = hasData ? latest.cover : null;
       let growthPerDay: number | null = null;
-      if (latest && prev) {
+      if (hasData && prev && prev.cover > 0) {
         const days = daysBetween(prev.date, latest.date);
         if (days > 0) growthPerDay = (latest.cover - prev.cover) / days;
       }

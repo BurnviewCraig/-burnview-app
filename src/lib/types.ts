@@ -66,6 +66,17 @@ export type WedgeFarm = {
   paddocks: WedgePaddock[];
 };
 
+export type OrderNumber = {
+  id: string;
+  number: number;
+  company: string | null;
+  item: string | null;
+  comment: string | null;
+  farmId: string | null;
+  farm: { id: string; name: string } | null;
+  createdAt: string;
+};
+
 export type StockItem = {
   id: string;
   kind: "FEED" | "LAND_INPUT" | "DAIRY";
