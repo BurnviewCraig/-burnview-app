@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Milk, Beef, Wheat, Boxes, Settings, LogOut, Map as MapIcon, CalendarDays, ClipboardList, Hash } from "lucide-react";
+import { Milk, Settings, LogOut, ClipboardList, Hash } from "lucide-react";
 import { useMemo } from "react";
 import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale } from "@/lib/calendarFormat";
+import { CalendarColorIcon, FarmColorIcon, CattleColorIcon, FeedColorIcon, StocksColorIcon } from "@/components/HomeIcons";
 
 const WIDGET_DAYS = 4; // today + previous 3 — fits comfortably in the card's width
 
@@ -54,7 +55,7 @@ export default function HomePage() {
       <div className="home-cards">
         <Link className="home-card calendar-widget" href="/calendar">
           <div className="calendar-widget-head">
-            <CalendarDays size={20} strokeWidth={1.5} />
+            <CalendarColorIcon size={20} />
             <span className="hc-title">Calendar</span>
           </div>
           <div className="calendar-widget-days">
@@ -79,22 +80,22 @@ export default function HomePage() {
         </Link>
 
         <Link className="home-card" href="/farm">
-          <MapIcon size={30} strokeWidth={1.5} />
+          <FarmColorIcon size={30} />
           <span className="hc-title">Farm</span>
           <span className="hc-sub">Map &amp; field activities</span>
         </Link>
         <Link className="home-card" href="/cattle">
-          <Beef size={30} strokeWidth={1.5} />
+          <CattleColorIcon size={30} />
           <span className="hc-title">Cattle</span>
           <span className="hc-sub">Herds &amp; movements</span>
         </Link>
         <Link className="home-card" href="/food">
-          <Wheat size={30} strokeWidth={1.5} />
+          <FeedColorIcon size={30} />
           <span className="hc-title">Feed</span>
           <span className="hc-sub">Pastures &amp; feed</span>
         </Link>
         <Link className="home-card" href="/stocks">
-          <Boxes size={30} strokeWidth={1.5} />
+          <StocksColorIcon size={30} />
           <span className="hc-title">Stocks</span>
           <span className="hc-sub">Fertilizer, diesel &amp; inputs</span>
         </Link>

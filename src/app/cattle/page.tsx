@@ -240,6 +240,23 @@ function GroupDetail({
         <div className="edit-entry-body">
           {view === "overview" && (
             <>
+              <div className="menu-list" style={{ flexShrink: 0, marginBottom: 4 }}>
+                <button className="menu-row" onClick={() => setView("headcount")}>
+                  <div className="menu-row-text">
+                    <span className="mr-title">Headcount details</span>
+                    <span className="mr-sub">Full history &amp; graph</span>
+                  </div>
+                  <ChevronRight size={16} />
+                </button>
+                <button className="menu-row" onClick={() => setView("milk")}>
+                  <div className="menu-row-text">
+                    <span className="mr-title">Milk production details</span>
+                    <span className="mr-sub">Full history, graph &amp; comparisons</span>
+                  </div>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+
               <label className="field">
                 <span className="field-label">Set headcount</span>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -289,23 +306,6 @@ function GroupDetail({
                     </div>
                   );
                 })}
-              </div>
-
-              <div className="menu-list" style={{ marginTop: 10, flexShrink: 0 }}>
-                <button className="menu-row" onClick={() => setView("headcount")}>
-                  <div className="menu-row-text">
-                    <span className="mr-title">Headcount details</span>
-                    <span className="mr-sub">Full history &amp; graph</span>
-                  </div>
-                  <ChevronRight size={16} />
-                </button>
-                <button className="menu-row" onClick={() => setView("milk")}>
-                  <div className="menu-row-text">
-                    <span className="mr-title">Milk production details</span>
-                    <span className="mr-sub">Full history, graph &amp; comparisons</span>
-                  </div>
-                  <ChevronRight size={16} />
-                </button>
               </div>
             </>
           )}
