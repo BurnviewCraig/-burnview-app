@@ -142,6 +142,13 @@ export type MilkSaleEntry = {
   takenBy: string | null;
 };
 
+export type RainfallEntry = {
+  id: string;
+  farmId: string;
+  date: string;
+  mm: number;
+};
+
 export type GrazingAllocation = {
   id: string;
   groupId: string;

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Map as MapIcon, ClipboardList, Pencil, ChevronRight } from "lucide-react";
+import { Map as MapIcon, ClipboardList, Pencil, CloudRain, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
 
 export default function FarmPage() {
@@ -12,6 +12,14 @@ export default function FarmPage() {
           <div className="menu-row-text">
             <span className="mr-title">Map</span>
             <span className="mr-sub">All 3 farms — herds &amp; field history</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+        <Link className="menu-row" href="/farm/rainfall">
+          <CloudRain size={18} strokeWidth={1.75} />
+          <div className="menu-row-text">
+            <span className="mr-title">Rainfall</span>
+            <span className="mr-sub">Daily mm per farm, with monthly totals</span>
           </div>
           <ChevronRight size={16} />
         </Link>

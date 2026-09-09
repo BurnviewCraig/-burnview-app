@@ -22,6 +22,7 @@ model User {
   orderNumbers    OrderNumber[]
   milkProductionEntries MilkProductionEntry[]
   milkSaleEntries MilkSaleEntry[]
+  rainfallEntries RainfallEntry[]
 }
 
 model Farm {
@@ -40,6 +41,7 @@ model Farm {
   workers         Worker[]
   orderNumbers    OrderNumber[]
   milkSales       MilkSaleEntry[]
+  rainfallEntries RainfallEntry[]
 }
 
 model Paddock {
@@ -370,4 +372,22 @@ model OrderNumber {
   createdAt   DateTime @default(now())
 
   @@unique([prefix, number])
+}
+
+// One rainfall reading per farm per day — same "upsert corrects that day"
+// pattern as headcount/milk. Monthly totals are just a sum over these,
+// computed on read rather than stored.
+model RainfallEntry {
+  id     String   @id @default(cuid())
+  farmId String
+  date   DateTime @db.Date
+  mm     Float
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  farm      Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@unique([farmId, date])
 }
