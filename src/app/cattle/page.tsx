@@ -77,6 +77,7 @@ export default function CattlePage() {
 
       {activeGroup && (
         <GroupDetail
+          key={activeGroup.id}
           group={activeGroup}
           farmName={farm.name}
           onClose={() => setActiveGroup(null)}
@@ -85,6 +86,21 @@ export default function CattlePage() {
       )}
     </div>
   );
+}
+
+type GroupView = "overview" | "headcount" | "milk";
+
+function round1(n: number) {
+  return Math.round(n * 10) / 10;
+}
+
+function monthKeyOf(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function pctChange(curr: number | null, base: number | null) {
+  if (curr == null || base == null || base === 0) return null;
+  return Math.round(((curr - base) / base) * 100);
 }
 
 function GroupDetail({
@@ -98,6 +114,8 @@ function GroupDetail({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const [view, setView] = useState<GroupView>("overview");
+
   const [count, setCount] = useState(group.currentCount != null ? String(group.currentCount) : "");
   const [date, setDate] = useState(todayStr());
   const [saving, setSaving] = useState(false);
@@ -106,6 +124,7 @@ function GroupDetail({
   const [milkDate, setMilkDate] = useState(todayStr());
   const [savingMilk, setSavingMilk] = useState(false);
   const [milkRange, setMilkRange] = useState<ChartRange>("1m");
+  const [headcountRange, setHeadcountRange] = useState<ChartRange>("1m");
 
   const { data: countsData, refetch: refetchCounts } = useApi<{ counts: CattleCountEntry[] }>(`/api/cattle-counts?groupId=${group.id}`);
   const counts = countsData?.counts ?? [];
@@ -114,6 +133,10 @@ function GroupDetail({
   const { data: milkData, refetch: refetchMilk } = useApi<{ entries: MilkProductionEntry[] }>(`/api/milk-production?groupId=${group.id}`);
   const milkEntries = milkData?.entries ?? [];
 
+  const countPoints = useMemo(
+    () => counts.map((c) => ({ date: c.date.slice(0, 10), value: c.count })),
+    [counts]
+  );
   const milkPoints = useMemo(
     () => milkEntries.map((m) => ({ date: m.date.slice(0, 10), value: m.litresPerCow })),
     [milkEntries]
@@ -122,7 +145,22 @@ function GroupDetail({
     const thisMonth = todayStr().slice(0, 7);
     const inMonth = milkEntries.filter((m) => m.date.slice(0, 7) === thisMonth);
     if (!inMonth.length) return null;
-    return Math.round((inMonth.reduce((s, m) => s + m.litresPerCow, 0) / inMonth.length) * 10) / 10;
+    return round1(inMonth.reduce((s, m) => s + m.litresPerCow, 0) / inMonth.length);
+  }, [milkEntries]);
+
+  // Month-on-month and year-on-year averages for the detailed milk view —
+  // dairy yield is seasonal, so "same month last year" matters more than a
+  // straight 12-months-ago comparison.
+  const milkComparison = useMemo(() => {
+    const avgForMonth = (key: string) => {
+      const rows = milkEntries.filter((m) => m.date.slice(0, 7) === key);
+      return rows.length ? round1(rows.reduce((s, m) => s + m.litresPerCow, 0) / rows.length) : null;
+    };
+    const now = new Date();
+    const thisMonth = avgForMonth(monthKeyOf(now));
+    const lastMonth = avgForMonth(monthKeyOf(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
+    const sameMonthLastYear = avgForMonth(`${now.getFullYear() - 1}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+    return { thisMonth, lastMonth, sameMonthLastYear };
   }, [milkEntries]);
 
   const handleSaveCount = async () => {
@@ -168,13 +206,15 @@ function GroupDetail({
     refetchAlloc();
   };
 
-  // Group allocations by date so day+night show on one line.
+  // Group allocations by date so day+night show on one line. Overview only
+  // ever shows the most recent 7 dates that have grazing logged.
   const allocByDate = new Map<string, GrazingAllocation[]>();
   allocations.forEach((a) => {
     const d = a.date.slice(0, 10);
     allocByDate.set(d, [...(allocByDate.get(d) ?? []), a]);
   });
-  const allocDates = [...allocByDate.keys()].sort((a, b) => (a < b ? 1 : -1));
+  const allocDates = [...allocByDate.keys()].sort((a, b) => (a < b ? 1 : -1)).slice(0, 7);
+  const milkLast7 = milkEntries.slice(0, 7);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -185,94 +225,153 @@ function GroupDetail({
       <div className="edit-entry-panel" onClick={(e) => e.stopPropagation()}>
         <div className="keypad-header">
           <div className="stock-panel-title">
-            <span className="keypad-code">{farmName} — Group {group.name}</span>
+            {view !== "overview" && (
+              <button className="link-btn" onClick={() => setView("overview")} style={{ marginBottom: 4 }}>‹ Back</button>
+            )}
+            <span className="keypad-code">
+              {view === "overview" && `${farmName} — Group ${group.name}`}
+              {view === "headcount" && `${group.name} — Headcount`}
+              {view === "milk" && `${group.name} — Milk production`}
+            </span>
           </div>
           <X size={18} className="close" onClick={onClose} />
         </div>
 
         <div className="edit-entry-body">
-          <label className="field">
-            <span className="field-label">Set headcount</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input className="field-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
-              <input className="field-input" type="number" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} placeholder="Head" style={{ width: 90 }} />
-            </div>
-            <button className="save-btn small" onClick={handleSaveCount} disabled={saving || count === ""} style={{ marginTop: 8 }}>
-              {saving ? "Saving…" : "Save headcount"}
-            </button>
-          </label>
-
-          <div className="field">
-            <span className="field-label">Headcount history</span>
-            {counts.length === 0 && <p className="ds-note">No headcounts logged yet.</p>}
-            {counts.slice(0, 10).map((c) => (
-              <div key={c.id} className="settings-row">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span className="mr-sub">{c.date.slice(0, 10)} — {c.count} head</span>
-                  <button className="link-btn" onClick={() => handleDeleteCount(c.id)} aria-label="Delete count">
-                    <Trash2 size={14} strokeWidth={1.75} />
-                  </button>
+          {view === "overview" && (
+            <>
+              <label className="field">
+                <span className="field-label">Set headcount</span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input className="field-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
+                  <input className="field-input" type="number" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} placeholder="Head" style={{ width: 90 }} />
                 </div>
+                <button className="save-btn small" onClick={handleSaveCount} disabled={saving || count === ""} style={{ marginTop: 8 }}>
+                  {saving ? "Saving…" : "Save headcount"}
+                </button>
+              </label>
+
+              <label className="field">
+                <span className="field-label">Milk production (litres per cow)</span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input className="field-input" type="date" value={milkDate} onChange={(e) => setMilkDate(e.target.value)} style={{ flex: 1 }} />
+                  <input className="field-input" type="number" inputMode="decimal" value={litresPerCow} onChange={(e) => setLitresPerCow(e.target.value)} placeholder="L/cow" style={{ width: 90 }} />
+                </div>
+                <button className="save-btn small" onClick={handleSaveMilk} disabled={savingMilk || litresPerCow === ""} style={{ marginTop: 8 }}>
+                  {savingMilk ? "Saving…" : "Save milk production"}
+                </button>
+              </label>
+
+              {monthlyAvg != null && (
+                <div className="wedge-info-box">
+                  <div><span className="wib-k">Daily avg this month</span><span className="wib-v">{monthlyAvg} L/cow</span></div>
+                </div>
+              )}
+
+              <div className="field">
+                <span className="field-label">Milk — last 7 days</span>
+                {milkLast7.length === 0 && <p className="ds-note">No milk production logged yet.</p>}
+                {milkLast7.map((m) => (
+                  <div key={m.id} className="mr-sub" style={{ padding: "4px 0" }}>{m.date.slice(0, 10)} — {m.litresPerCow} L/cow</div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <label className="field">
-            <span className="field-label">Milk production (litres per cow)</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input className="field-input" type="date" value={milkDate} onChange={(e) => setMilkDate(e.target.value)} style={{ flex: 1 }} />
-              <input className="field-input" type="number" inputMode="decimal" value={litresPerCow} onChange={(e) => setLitresPerCow(e.target.value)} placeholder="L/cow" style={{ width: 90 }} />
-            </div>
-            <button className="save-btn small" onClick={handleSaveMilk} disabled={savingMilk || litresPerCow === ""} style={{ marginTop: 8 }}>
-              {savingMilk ? "Saving…" : "Save milk production"}
-            </button>
-          </label>
+              <div className="field">
+                <span className="field-label">Grazing — last 7 days</span>
+                {allocDates.length === 0 && <p className="ds-note">No grazing logged yet — use Feed &gt; Grazing allocation.</p>}
+                {allocDates.map((d) => {
+                  const rows = allocByDate.get(d)!;
+                  const day = rows.find((r) => r.session === "DAY");
+                  const night = rows.find((r) => r.session === "NIGHT");
+                  return (
+                    <div key={d} className="mr-sub" style={{ padding: "4px 0" }}>
+                      {d} — {day ? `${day.paddock.code} Day` : ""}{day && night ? ", " : ""}{night ? `${night.paddock.code} Night` : ""}
+                    </div>
+                  );
+                })}
+              </div>
 
-          {monthlyAvg != null && (
-            <div className="wedge-info-box">
-              <div><span className="wib-k">Daily avg this month</span><span className="wib-v">{monthlyAvg} L/cow</span></div>
-            </div>
+              <div className="menu-list" style={{ marginTop: 10, flexShrink: 0 }}>
+                <button className="menu-row" onClick={() => setView("headcount")}>
+                  <div className="menu-row-text">
+                    <span className="mr-title">Headcount details</span>
+                    <span className="mr-sub">Full history &amp; graph</span>
+                  </div>
+                  <ChevronRight size={16} />
+                </button>
+                <button className="menu-row" onClick={() => setView("milk")}>
+                  <div className="menu-row-text">
+                    <span className="mr-title">Milk production details</span>
+                    <span className="mr-sub">Full history, graph &amp; comparisons</span>
+                  </div>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </>
           )}
 
-          <TrendChart points={milkPoints} range={milkRange} onRangeChange={setMilkRange} unit=" L/cow" yLabel="Litres per cow" />
-
-          <div className="field">
-            <span className="field-label">Milk production history</span>
-            {milkEntries.length === 0 && <p className="ds-note">No milk production logged yet.</p>}
-            {milkEntries.slice(0, 10).map((m) => (
-              <div key={m.id} className="settings-row">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span className="mr-sub">{m.date.slice(0, 10)} — {m.litresPerCow} L/cow</span>
-                  <button className="link-btn" onClick={() => handleDeleteMilk(m.id)} aria-label="Delete milk entry">
-                    <Trash2 size={14} strokeWidth={1.75} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="field">
-            <span className="field-label">Grazing history</span>
-            {allocDates.length === 0 && <p className="ds-note">No grazing logged yet — use Feed &gt; Grazing allocation.</p>}
-            {allocDates.slice(0, 14).map((d) => {
-              const rows = allocByDate.get(d)!;
-              const day = rows.find((r) => r.session === "DAY");
-              const night = rows.find((r) => r.session === "NIGHT");
-              return (
-                <div key={d} className="settings-row">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="mr-sub">
-                      {d} — {day ? `${day.paddock.code} Day` : ""}{day && night ? ", " : ""}{night ? `${night.paddock.code} Night` : ""}
-                    </span>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {day && <button className="link-btn" onClick={() => handleDeleteAllocation(day.id)} aria-label="Delete day allocation"><Trash2 size={14} strokeWidth={1.75} /></button>}
-                      {night && <button className="link-btn" onClick={() => handleDeleteAllocation(night.id)} aria-label="Delete night allocation"><Trash2 size={14} strokeWidth={1.75} /></button>}
+          {view === "headcount" && (
+            <>
+              <TrendChart points={countPoints} range={headcountRange} onRangeChange={setHeadcountRange} unit=" head" yLabel="Headcount" />
+              <div className="field">
+                <span className="field-label">Headcount history</span>
+                {counts.length === 0 && <p className="ds-note">No headcounts logged yet.</p>}
+                {counts.slice(0, 60).map((c) => (
+                  <div key={c.id} className="settings-row">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span className="mr-sub">{c.date.slice(0, 10)} — {c.count} head</span>
+                      <button className="link-btn" onClick={() => handleDeleteCount(c.id)} aria-label="Delete count">
+                        <Trash2 size={14} strokeWidth={1.75} />
+                      </button>
                     </div>
                   </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {view === "milk" && (
+            <>
+              <div className="wedge-info-box">
+                <div><span className="wib-k">This month</span><span className="wib-v">{milkComparison.thisMonth ?? "—"} L/cow</span></div>
+                <div>
+                  <span className="wib-k">Last month</span>
+                  <span className="wib-v">
+                    {milkComparison.lastMonth ?? "—"} L/cow
+                    {pctChange(milkComparison.thisMonth, milkComparison.lastMonth) != null && (
+                      <> ({pctChange(milkComparison.thisMonth, milkComparison.lastMonth)! > 0 ? "+" : ""}{pctChange(milkComparison.thisMonth, milkComparison.lastMonth)}%)</>
+                    )}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+                <div>
+                  <span className="wib-k">Same month last yr</span>
+                  <span className="wib-v">
+                    {milkComparison.sameMonthLastYear ?? "—"} L/cow
+                    {pctChange(milkComparison.thisMonth, milkComparison.sameMonthLastYear) != null && (
+                      <> ({pctChange(milkComparison.thisMonth, milkComparison.sameMonthLastYear)! > 0 ? "+" : ""}{pctChange(milkComparison.thisMonth, milkComparison.sameMonthLastYear)}%)</>
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              <TrendChart points={milkPoints} range={milkRange} onRangeChange={setMilkRange} unit=" L/cow" yLabel="Litres per cow" />
+
+              <div className="field">
+                <span className="field-label">Milk production history</span>
+                {milkEntries.length === 0 && <p className="ds-note">No milk production logged yet.</p>}
+                {milkEntries.slice(0, 60).map((m) => (
+                  <div key={m.id} className="settings-row">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span className="mr-sub">{m.date.slice(0, 10)} — {m.litresPerCow} L/cow</span>
+                      <button className="link-btn" onClick={() => handleDeleteMilk(m.id)} aria-label="Delete milk entry">
+                        <Trash2 size={14} strokeWidth={1.75} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>,
