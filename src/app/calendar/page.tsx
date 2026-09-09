@@ -9,7 +9,7 @@ import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { EditEntryPanel, type EditableEntry } from "@/components/EditEntryPanel";
 import { BulkEditPanel } from "@/components/BulkEditPanel";
-import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale, type WalkGroup, type CalendarEvent } from "@/lib/calendarFormat";
+import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale, type MilkSaleGroup, type WalkGroup, type CalendarEvent } from "@/lib/calendarFormat";
 import type { Farm } from "@/lib/types";
 
 export default function CalendarPage() {
@@ -47,7 +47,7 @@ export default function CalendarPage() {
       const g = e.raw as WalkGroup;
       router.push(`/food/data-entry/pasture-walk?farmId=${g.farmId}&date=${g.date}`);
     } else if (e.isMilkSale) {
-      const m = e.raw as RawMilkSale;
+      const m = e.raw as MilkSaleGroup;
       router.push(`/milk-sold?farmId=${m.farmId}&date=${m.date}`);
     } else {
       const a = e.raw as RawActivity;

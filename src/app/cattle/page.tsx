@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { X, Trash2, Utensils, ChevronRight, Milk } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
+import { TrendChart, type ChartRange } from "@/components/TrendChart";
 import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import type { Farm, CattleGroup, CattleCountEntry, GrazingAllocation, MilkProductionEntry } from "@/lib/types";
@@ -104,6 +105,7 @@ function GroupDetail({
   const [litresPerCow, setLitresPerCow] = useState(group.currentMilkPerCow != null ? String(group.currentMilkPerCow) : "");
   const [milkDate, setMilkDate] = useState(todayStr());
   const [savingMilk, setSavingMilk] = useState(false);
+  const [milkRange, setMilkRange] = useState<ChartRange>("1m");
 
   const { data: countsData, refetch: refetchCounts } = useApi<{ counts: CattleCountEntry[] }>(`/api/cattle-counts?groupId=${group.id}`);
   const counts = countsData?.counts ?? [];
@@ -111,6 +113,17 @@ function GroupDetail({
   const allocations = allocData?.allocations ?? [];
   const { data: milkData, refetch: refetchMilk } = useApi<{ entries: MilkProductionEntry[] }>(`/api/milk-production?groupId=${group.id}`);
   const milkEntries = milkData?.entries ?? [];
+
+  const milkPoints = useMemo(
+    () => milkEntries.map((m) => ({ date: m.date.slice(0, 10), value: m.litresPerCow })),
+    [milkEntries]
+  );
+  const monthlyAvg = useMemo(() => {
+    const thisMonth = todayStr().slice(0, 7);
+    const inMonth = milkEntries.filter((m) => m.date.slice(0, 7) === thisMonth);
+    if (!inMonth.length) return null;
+    return Math.round((inMonth.reduce((s, m) => s + m.litresPerCow, 0) / inMonth.length) * 10) / 10;
+  }, [milkEntries]);
 
   const handleSaveCount = async () => {
     if (count === "" || Number(count) < 0) return;
@@ -214,6 +227,14 @@ function GroupDetail({
               {savingMilk ? "Saving…" : "Save milk production"}
             </button>
           </label>
+
+          {monthlyAvg != null && (
+            <div className="wedge-info-box">
+              <div><span className="wib-k">Daily avg this month</span><span className="wib-v">{monthlyAvg} L/cow</span></div>
+            </div>
+          )}
+
+          <TrendChart points={milkPoints} range={milkRange} onRangeChange={setMilkRange} unit=" L/cow" yLabel="Litres per cow" />
 
           <div className="field">
             <span className="field-label">Milk production history</span>

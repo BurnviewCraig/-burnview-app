@@ -141,16 +141,17 @@ model MilkProductionEntry {
   @@unique([groupId, date])
 }
 
-// Milk actually sold off the farm for one day, farm-wide (not per group —
-// the collection truck takes the whole tank at once) plus who took it.
-// Deliberately separate from MilkProductionEntry: sold litres don't have to
-// reconcile exactly with what the groups produced that day.
+// One collection of milk sold off the farm — a farm can have several of
+// these on the same day (different buyers each taking their own load), so
+// there's no unique constraint on farmId+date here, unlike the other daily
+// entries. Deliberately separate from MilkProductionEntry: sold litres
+// don't have to reconcile exactly with what the groups produced that day.
 model MilkSaleEntry {
   id      String   @id @default(cuid())
   farmId  String
   date    DateTime @db.Date
   litres  Float
-  takenBy String? // who collected it, e.g. driver/company name
+  takenBy String? // who collected it, e.g. driver/company/buyer name
 
   createdById String?
   createdAt   DateTime @default(now())
@@ -158,7 +159,7 @@ model MilkSaleEntry {
   farm      Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
   createdBy User? @relation(fields: [createdById], references: [id])
 
-  @@unique([farmId, date])
+  @@index([farmId, date])
 }
 
 enum ActivityType {

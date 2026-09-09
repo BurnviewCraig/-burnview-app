@@ -17,9 +17,10 @@ export async function GET(req: Request) {
   return NextResponse.json({ entries });
 }
 
-// Upsert — one sold-litres reading per farm per day (the whole tank goes at
-// once, not per group). Doesn't have to match that day's total production —
-// logging again for the same day just corrects it rather than duplicating.
+// Always creates a new collection — a farm can have several buyers taking
+// milk on the same day, so this doesn't correct/overwrite same-day entries
+// the way headcount/production/rainfall do. Wrong entries are fixed via
+// PATCH/DELETE on /api/milk-sales/[id] instead.
 export async function POST(req: Request) {
   const body = await req.json();
   const { farmId, date, litres, takenBy }: { farmId: string; date: string; litres: number; takenBy?: string | null } = body;
@@ -27,10 +28,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
   const userId = await currentUserId();
-  const entry = await prisma.milkSaleEntry.upsert({
-    where: { farmId_date: { farmId, date: new Date(date) } },
-    update: { litres, takenBy: takenBy || null, createdById: userId },
-    create: { farmId, date: new Date(date), litres, takenBy: takenBy || null, createdById: userId },
+  const entry = await prisma.milkSaleEntry.create({
+    data: { farmId, date: new Date(date), litres, takenBy: takenBy || null, createdById: userId },
   });
   return NextResponse.json({ entry });
 }

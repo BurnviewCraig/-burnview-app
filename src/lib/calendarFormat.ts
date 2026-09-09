@@ -43,8 +43,9 @@ export type RawGrazing = {
   nightPaddockCode: string | null;
 };
 
-// The whole farm's tank for one day — one row per farm per day already, no
-// grouping needed (unlike pasture walks, which are per-paddock).
+// One buyer's collection — a farm can have several of these on the same
+// day (different buyers), so the calendar sums them per farm+day; see
+// MilkSaleGroup below.
 export type RawMilkSale = {
   id: string;
   farmId: string;
@@ -54,11 +55,21 @@ export type RawMilkSale = {
   farm: { name: string };
 };
 
+// A farm's total litres sold for one day, summed across every buyer's
+// collection that day — the calendar only cares about the total, not who
+// took it.
+export type MilkSaleGroup = {
+  farmId: string;
+  farmName: string;
+  date: string;
+  totalLitres: number;
+};
+
 export type CalendarEvent = {
   id: string;
   farmName: string;
   label: string;
-  raw: RawActivity | WalkGroup | RawGrazing | RawMilkSale;
+  raw: RawActivity | WalkGroup | RawGrazing | MilkSaleGroup;
   isWalk: boolean;
   isGrazing?: boolean;
   isWalkGroup?: boolean;
@@ -101,12 +112,13 @@ export function walkGroupLabel(g: WalkGroup): string {
   return `${g.farmName} Pasture walk`;
 }
 
+export function milkSaleGroupLabel(g: MilkSaleGroup): string {
+  return `Total milk sold — ${g.totalLitres}L`;
+}
+
 // "A (510) — R49 Day, Night" when day/night share a camp, or
 // "A (511) — R49 Day, R26 Night" when they don't. Headcount is omitted if
 // none has been logged yet.
-export function milkSaleLabel(m: RawMilkSale): string {
-  return `Total milk sold — ${m.litres}L${m.takenBy ? ` (${m.takenBy})` : ""}`;
-}
 
 export function grazingLabel(g: RawGrazing): string {
   const countPart = g.count != null ? ` (${g.count})` : "";
@@ -149,11 +161,19 @@ export function eventsFromCalendarData(
     isWalk: false,
     isGrazing: true,
   }));
-  const milkSales = (data?.milkSales ?? []).map((m) => ({
-    id: m.id,
-    farmName: m.farm.name,
-    label: milkSaleLabel(m),
-    raw: m,
+  const milkSaleGroups = new Map<string, MilkSaleGroup>();
+  (data?.milkSales ?? []).forEach((m) => {
+    const date = m.date.slice(0, 10);
+    const key = `${m.farmId}|${date}`;
+    const existing = milkSaleGroups.get(key);
+    if (existing) existing.totalLitres += m.litres;
+    else milkSaleGroups.set(key, { farmId: m.farmId, farmName: m.farm.name, date, totalLitres: m.litres });
+  });
+  const milkSales: CalendarEvent[] = [...milkSaleGroups.values()].map((g) => ({
+    id: `milk-sale-${g.farmId}-${g.date}`,
+    farmName: g.farmName,
+    label: milkSaleGroupLabel(g),
+    raw: g,
     isWalk: false,
     isMilkSale: true,
   }));

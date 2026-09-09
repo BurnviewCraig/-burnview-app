@@ -174,6 +174,13 @@ export const NUTRIENT_RANGES = [
   { id: "all", label: "All time" },
 ] as const;
 
+// Range selector for the milk (production/sold) trend charts.
+export const MILK_CHART_RANGES = [
+  { id: "1m", label: "1 month" },
+  { id: "3m", label: "3 months" },
+  { id: "ytd", label: "Year to date" },
+] as const;
+
 // Feed stock starts at 0 for every item — real opening balances need a
 // restock entry once this is live.
 export const FEED_ITEMS_SEED = [
