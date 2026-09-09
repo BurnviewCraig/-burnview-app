@@ -20,6 +20,8 @@ model User {
   grazingAllocations GrazingAllocation[]
   cattleCountEntries CattleCountEntry[]
   orderNumbers    OrderNumber[]
+  milkProductionEntries MilkProductionEntry[]
+  milkSaleEntries MilkSaleEntry[]
 }
 
 model Farm {
@@ -37,6 +39,7 @@ model Farm {
   grazingAllocations GrazingAllocation[]
   workers         Worker[]
   orderNumbers    OrderNumber[]
+  milkSales       MilkSaleEntry[]
 }
 
 model Paddock {
@@ -69,6 +72,7 @@ model CattleGroup {
   farm        Farm                @relation(fields: [farmId], references: [id], onDelete: Cascade)
   allocations GrazingAllocation[]
   counts      CattleCountEntry[]
+  milkEntries MilkProductionEntry[]
 
   @@unique([farmId, name])
 }
@@ -116,6 +120,43 @@ model CattleCountEntry {
   createdBy User?       @relation(fields: [createdById], references: [id])
 
   @@unique([groupId, date])
+}
+
+// One litres-per-cow reading per group per day (not the group's tank total)
+// — same "upsert corrects that day" pattern as headcount.
+model MilkProductionEntry {
+  id           String   @id @default(cuid())
+  groupId      String
+  date         DateTime @db.Date
+  litresPerCow Float
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  group     CattleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id])
+
+  @@unique([groupId, date])
+}
+
+// Milk actually sold off the farm for one day, farm-wide (not per group —
+// the collection truck takes the whole tank at once) plus who took it.
+// Deliberately separate from MilkProductionEntry: sold litres don't have to
+// reconcile exactly with what the groups produced that day.
+model MilkSaleEntry {
+  id      String   @id @default(cuid())
+  farmId  String
+  date    DateTime @db.Date
+  litres  Float
+  takenBy String? // who collected it, e.g. driver/company name
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  farm      Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@unique([farmId, date])
 }
 
 enum ActivityType {

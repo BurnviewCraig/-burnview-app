@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { X, Trash2, Utensils, ChevronRight } from "lucide-react";
+import { X, Trash2, Utensils, ChevronRight, Milk } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
-import type { Farm, CattleGroup, CattleCountEntry, GrazingAllocation } from "@/lib/types";
+import type { Farm, CattleGroup, CattleCountEntry, GrazingAllocation, MilkProductionEntry } from "@/lib/types";
 
 export default function CattlePage() {
   const { data: farmsData, loading } = useApi<{ farms: Farm[] }>("/api/farms");
@@ -44,6 +44,14 @@ export default function CattlePage() {
           </div>
           <ChevronRight size={16} />
         </Link>
+        <Link className="menu-row" href="/milk-sold">
+          <Milk size={18} strokeWidth={1.75} />
+          <div className="menu-row-text">
+            <span className="mr-title">Milk sold</span>
+            <span className="mr-sub">Litres sold per day, and who took it</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
       </div>
 
       <div className="tabs">
@@ -60,6 +68,7 @@ export default function CattlePage() {
             <span className="field-editor-sub">
               {g.currentCount != null ? `${g.currentCount} head` : "No count set"}
               {g.currentCountDate ? ` · as of ${g.currentCountDate}` : ""}
+              {g.currentMilkPerCow != null ? ` · ${g.currentMilkPerCow} L/cow (${g.currentMilkDate})` : ""}
             </span>
           </button>
         ))}
@@ -92,10 +101,16 @@ function GroupDetail({
   const [date, setDate] = useState(todayStr());
   const [saving, setSaving] = useState(false);
 
+  const [litresPerCow, setLitresPerCow] = useState(group.currentMilkPerCow != null ? String(group.currentMilkPerCow) : "");
+  const [milkDate, setMilkDate] = useState(todayStr());
+  const [savingMilk, setSavingMilk] = useState(false);
+
   const { data: countsData, refetch: refetchCounts } = useApi<{ counts: CattleCountEntry[] }>(`/api/cattle-counts?groupId=${group.id}`);
   const counts = countsData?.counts ?? [];
   const { data: allocData, refetch: refetchAlloc } = useApi<{ allocations: GrazingAllocation[] }>(`/api/grazing-allocations?groupId=${group.id}`);
   const allocations = allocData?.allocations ?? [];
+  const { data: milkData, refetch: refetchMilk } = useApi<{ entries: MilkProductionEntry[] }>(`/api/milk-production?groupId=${group.id}`);
+  const milkEntries = milkData?.entries ?? [];
 
   const handleSaveCount = async () => {
     if (count === "" || Number(count) < 0) return;
@@ -107,6 +122,25 @@ function GroupDetail({
     });
     setSaving(false);
     refetchCounts();
+    onChanged();
+  };
+
+  const handleSaveMilk = async () => {
+    if (litresPerCow === "" || Number(litresPerCow) < 0) return;
+    setSavingMilk(true);
+    await fetch("/api/milk-production", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupId: group.id, date: milkDate, litresPerCow: Number(litresPerCow) }),
+    });
+    setSavingMilk(false);
+    refetchMilk();
+    onChanged();
+  };
+
+  const handleDeleteMilk = async (id: string) => {
+    await fetch(`/api/milk-production/${id}`, { method: "DELETE" });
+    refetchMilk();
     onChanged();
   };
 
@@ -163,6 +197,32 @@ function GroupDetail({
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span className="mr-sub">{c.date.slice(0, 10)} — {c.count} head</span>
                   <button className="link-btn" onClick={() => handleDeleteCount(c.id)} aria-label="Delete count">
+                    <Trash2 size={14} strokeWidth={1.75} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <label className="field">
+            <span className="field-label">Milk production (litres per cow)</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input className="field-input" type="date" value={milkDate} onChange={(e) => setMilkDate(e.target.value)} style={{ flex: 1 }} />
+              <input className="field-input" type="number" inputMode="decimal" value={litresPerCow} onChange={(e) => setLitresPerCow(e.target.value)} placeholder="L/cow" style={{ width: 90 }} />
+            </div>
+            <button className="save-btn small" onClick={handleSaveMilk} disabled={savingMilk || litresPerCow === ""} style={{ marginTop: 8 }}>
+              {savingMilk ? "Saving…" : "Save milk production"}
+            </button>
+          </label>
+
+          <div className="field">
+            <span className="field-label">Milk production history</span>
+            {milkEntries.length === 0 && <p className="ds-note">No milk production logged yet.</p>}
+            {milkEntries.slice(0, 10).map((m) => (
+              <div key={m.id} className="settings-row">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="mr-sub">{m.date.slice(0, 10)} — {m.litresPerCow} L/cow</span>
+                  <button className="link-btn" onClick={() => handleDeleteMilk(m.id)} aria-label="Delete milk entry">
                     <Trash2 size={14} strokeWidth={1.75} />
                   </button>
                 </div>

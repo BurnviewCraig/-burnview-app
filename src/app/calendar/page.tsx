@@ -9,7 +9,7 @@ import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { EditEntryPanel, type EditableEntry } from "@/components/EditEntryPanel";
 import { BulkEditPanel } from "@/components/BulkEditPanel";
-import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type WalkGroup, type CalendarEvent } from "@/lib/calendarFormat";
+import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale, type WalkGroup, type CalendarEvent } from "@/lib/calendarFormat";
 import type { Farm } from "@/lib/types";
 
 export default function CalendarPage() {
@@ -23,7 +23,7 @@ export default function CalendarPage() {
   const today = todayStr();
   const start = addDays(today, -(daysBack - 1));
 
-  const { data, loading, refetch } = useApi<{ activities: RawActivity[]; walks: RawWalk[]; grazing: RawGrazing[] }>(
+  const { data, loading, refetch } = useApi<{ activities: RawActivity[]; walks: RawWalk[]; grazing: RawGrazing[]; milkSales: RawMilkSale[] }>(
     `/api/calendar?start=${start}&end=${today}${farmId !== "all" ? `&farmId=${farmId}` : ""}`
   );
 
@@ -46,6 +46,9 @@ export default function CalendarPage() {
     if (e.isWalkGroup) {
       const g = e.raw as WalkGroup;
       router.push(`/food/data-entry/pasture-walk?farmId=${g.farmId}&date=${g.date}`);
+    } else if (e.isMilkSale) {
+      const m = e.raw as RawMilkSale;
+      router.push(`/milk-sold?farmId=${m.farmId}&date=${m.date}`);
     } else {
       const a = e.raw as RawActivity;
       setEditingEntry({
@@ -111,7 +114,7 @@ export default function CalendarPage() {
 
   const handleEventClick = (e: CalendarEvent) => {
     if (e.isGrazing) return;
-    if (e.isWalkGroup) { if (!selectMode) openEdit(e); return; } // a whole day's sheet, not a single selectable/deletable row
+    if (e.isWalkGroup || e.isMilkSale) { if (!selectMode) openEdit(e); return; } // a whole day's sheet/farm total, not a single selectable/deletable row
     if (selectMode) toggleSelected(e.id);
     else openEdit(e);
   };
@@ -160,8 +163,8 @@ export default function CalendarPage() {
                     {events.length === 0 && <span className="calendar-empty">Nothing logged</span>}
                     {events.map((e) => {
                       const isSelected = selectedIds.has(e.id);
-                      const selectable = !e.isGrazing && !e.isWalkGroup;
-                      const clickable = !e.isGrazing && !(e.isWalkGroup && selectMode);
+                      const selectable = !e.isGrazing && !e.isWalkGroup && !e.isMilkSale;
+                      const clickable = !e.isGrazing && !((e.isWalkGroup || e.isMilkSale) && selectMode);
                       return (
                         <div
                           key={e.id}

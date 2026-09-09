@@ -43,14 +43,26 @@ export type RawGrazing = {
   nightPaddockCode: string | null;
 };
 
+// The whole farm's tank for one day — one row per farm per day already, no
+// grouping needed (unlike pasture walks, which are per-paddock).
+export type RawMilkSale = {
+  id: string;
+  farmId: string;
+  date: string;
+  litres: number;
+  takenBy: string | null;
+  farm: { name: string };
+};
+
 export type CalendarEvent = {
   id: string;
   farmName: string;
   label: string;
-  raw: RawActivity | WalkGroup | RawGrazing;
+  raw: RawActivity | WalkGroup | RawGrazing | RawMilkSale;
   isWalk: boolean;
   isGrazing?: boolean;
   isWalkGroup?: boolean;
+  isMilkSale?: boolean;
 };
 
 export const TYPE_LABEL: Record<string, string> = {
@@ -92,6 +104,10 @@ export function walkGroupLabel(g: WalkGroup): string {
 // "A (510) — R49 Day, Night" when day/night share a camp, or
 // "A (511) — R49 Day, R26 Night" when they don't. Headcount is omitted if
 // none has been logged yet.
+export function milkSaleLabel(m: RawMilkSale): string {
+  return `Total milk sold — ${m.litres}L${m.takenBy ? ` (${m.takenBy})` : ""}`;
+}
+
 export function grazingLabel(g: RawGrazing): string {
   const countPart = g.count != null ? ` (${g.count})` : "";
   const parts: string[] = [];
@@ -105,7 +121,7 @@ export function grazingLabel(g: RawGrazing): string {
 }
 
 export function eventsFromCalendarData(
-  data: { activities: RawActivity[]; walks: RawWalk[]; grazing?: RawGrazing[] } | null
+  data: { activities: RawActivity[]; walks: RawWalk[]; grazing?: RawGrazing[]; milkSales?: RawMilkSale[] } | null
 ): CalendarEvent[] {
   const acts = (data?.activities ?? []).map((a) => ({ id: a.id, farmName: a.farm.name, label: activityLabel(a), raw: a, isWalk: false }));
 
@@ -133,14 +149,23 @@ export function eventsFromCalendarData(
     isWalk: false,
     isGrazing: true,
   }));
-  // Within a day, grazing (cows) leads, then mulching, then everything else —
-  // sort is stable so ties keep their original relative order.
+  const milkSales = (data?.milkSales ?? []).map((m) => ({
+    id: m.id,
+    farmName: m.farm.name,
+    label: milkSaleLabel(m),
+    raw: m,
+    isWalk: false,
+    isMilkSale: true,
+  }));
+  // Within a day, grazing (cows) and milk sold lead — watched every day, must
+  // never be buried — then mulching, then everything else. Sort is stable so
+  // ties keep their original relative order.
   const priority = (e: CalendarEvent): number => {
-    if (e.isGrazing) return 0;
+    if (e.isGrazing || e.isMilkSale) return 0;
     if (!e.isWalk && (e.raw as RawActivity).type === "MULCHING") return 1;
     return 2;
   };
-  return [...acts, ...walks, ...grazing].sort((a, b) => priority(a) - priority(b));
+  return [...acts, ...walks, ...grazing, ...milkSales].sort((a, b) => priority(a) - priority(b));
 }
 
 // Pure calendar-date arithmetic in UTC throughout (parse and format both as

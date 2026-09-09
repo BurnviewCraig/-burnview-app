@@ -6,7 +6,7 @@ import { Milk, Beef, Wheat, Boxes, Settings, LogOut, Map as MapIcon, CalendarDay
 import { useMemo } from "react";
 import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
-import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing } from "@/lib/calendarFormat";
+import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale } from "@/lib/calendarFormat";
 
 const WIDGET_DAYS = 4; // today + previous 3 — fits comfortably in the card's width
 
@@ -14,7 +14,7 @@ export default function HomePage() {
   const { data: session } = useSession();
   const today = todayStr();
   const start = addDays(today, -(WIDGET_DAYS - 1));
-  const { data: calendarData } = useApi<{ activities: RawActivity[]; walks: RawWalk[]; grazing: RawGrazing[] }>(
+  const { data: calendarData } = useApi<{ activities: RawActivity[]; walks: RawWalk[]; grazing: RawGrazing[]; milkSales: RawMilkSale[] }>(
     `/api/calendar?start=${start}&end=${today}`
   );
   const eventsByDate = useMemo(() => {

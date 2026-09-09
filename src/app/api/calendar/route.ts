@@ -15,7 +15,7 @@ export async function GET(req: Request) {
 
   const dateFilter = { gte: new Date(start), lte: new Date(end) };
 
-  const [activities, walks, grazing, groups] = await Promise.all([
+  const [activities, walks, grazing, groups, milkSales] = await Promise.all([
     prisma.fieldActivity.findMany({
       where: { date: dateFilter, ...(farmId ? { farmId } : {}) },
       include: { paddock: { select: { code: true, sizeHa: true } }, farm: { select: { name: true } } },
@@ -34,6 +34,11 @@ export async function GET(req: Request) {
     prisma.cattleGroup.findMany({
       where: farmId ? { farmId } : undefined,
       include: { counts: { where: { date: { lte: new Date(end) } }, orderBy: { date: "desc" } } },
+    }),
+    prisma.milkSaleEntry.findMany({
+      where: { date: dateFilter, ...(farmId ? { farmId } : {}) },
+      include: { farm: { select: { name: true } } },
+      orderBy: { date: "asc" },
     }),
   ]);
 
@@ -65,5 +70,5 @@ export async function GET(req: Request) {
     };
   });
 
-  return NextResponse.json({ activities, walks, grazing: grazingSummary });
+  return NextResponse.json({ activities, walks, grazing: grazingSummary, milkSales });
 }

@@ -116,6 +116,8 @@ export type CattleGroup = {
   name: string;
   currentCount: number | null;
   currentCountDate: string | null;
+  currentMilkPerCow: number | null;
+  currentMilkDate: string | null;
 };
 
 export type CattleCountEntry = {
@@ -123,6 +125,21 @@ export type CattleCountEntry = {
   groupId: string;
   date: string;
   count: number;
+};
+
+export type MilkProductionEntry = {
+  id: string;
+  groupId: string;
+  date: string;
+  litresPerCow: number;
+};
+
+export type MilkSaleEntry = {
+  id: string;
+  farmId: string;
+  date: string;
+  litres: number;
+  takenBy: string | null;
 };
 
 export type GrazingAllocation = {
