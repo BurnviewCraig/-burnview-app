@@ -177,6 +177,9 @@ a:visited { color: var(--ink); }
 .diesel-history-table th, .diesel-history-table td { text-align: left; white-space: nowrap; }
 .diesel-history-table td:nth-child(9), .diesel-history-table td:nth-child(10), .diesel-history-table td:nth-child(11) { white-space: normal; }
 .diesel-not-worked td { color: var(--ink-soft); font-style: italic; background: var(--paper-deep); }
+.diesel-row-clickable { cursor: pointer; }
+.diesel-row-clickable:hover td { background: var(--paper-deep); }
+.diesel-not-worked-cell { color: var(--ink-soft); font-style: italic; text-align: left !important; }
 
 .timebook-table { min-width: 640px; }
 .timebook-name { text-align: left; cursor: pointer; width: 110px; }

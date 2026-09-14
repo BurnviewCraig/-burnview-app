@@ -181,6 +181,12 @@ export type TimeBookEntry = {
   overtime: string | null;
 };
 
+export type DieselActivityType = {
+  id: string;
+  name: string;
+  sortOrder: number;
+};
+
 export type DieselAsset = {
   id: string;
   farmId: string;

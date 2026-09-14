@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { X, Plus, Trash2, History } from "lucide-react";
+import { X, Plus, Trash2, History, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
 import { byPaddockNumber, todayStr } from "@/lib/utils";
-import { DIESEL_ACTIVITIES } from "@/lib/constants";
-import type { Farm, DieselAsset, DieselLogEntry, Worker } from "@/lib/types";
+import { addDays } from "@/lib/calendarFormat";
+import { computeDieselByDate } from "@/lib/dieselCalc";
+import type { Farm, DieselAsset, DieselLogEntry, DieselActivityType, Worker } from "@/lib/types";
 
 export default function DieselPage() {
   const { data: farmsData, loading } = useApi<{ farms: Farm[] }>("/api/farms");
@@ -27,23 +28,49 @@ export default function DieselPage() {
   const assets = assetsData?.assets ?? [];
   const activeAssets = assets.filter((a) => a.active);
 
+  // Whole farm's history in one fetch — used both to prefill/compute the
+  // selected date's row for every asset, and as the sticky-driver source
+  // when opening a day that has no entry of its own yet.
   const { data: entriesData, refetch: refetchEntries } = useApi<{ entries: DieselLogEntry[] }>(
-    farm ? `/api/diesel-entries?farmId=${farm.id}&date=${date}` : null
+    farm ? `/api/diesel-entries?farmId=${farm.id}` : null
   );
-  const entries = entriesData?.entries ?? [];
-  const entryByAsset = new Map(entries.map((e) => [e.assetId, e]));
+  const allEntries = entriesData?.entries ?? [];
+
+  const { data: activityData } = useApi<{ types: DieselActivityType[] }>("/api/diesel-activity-types");
+  const activityTypes = activityData?.types ?? [];
 
   const { data: workersData } = useApi<{ workers: Worker[] }>(farm ? `/api/workers?farmId=${farm.id}` : null);
   const workers = workersData?.workers ?? [];
+
+  const entriesByAsset = useMemo(() => {
+    const map = new Map<string, DieselLogEntry[]>();
+    allEntries.forEach((e) => map.set(e.assetId, [...(map.get(e.assetId) ?? []), e]));
+    return map;
+  }, [allEntries]);
+
+  const rowsForDate = useMemo(
+    () =>
+      activeAssets.map((a) => {
+        const assetEntries = entriesByAsset.get(a.id) ?? [];
+        const entry = assetEntries.find((e) => e.date === date) ?? null;
+        const computed = computeDieselByDate(assetEntries, a.unit).get(date) ?? null;
+        return { asset: a, entry, computed };
+      }),
+    [activeAssets, entriesByAsset, date]
+  );
 
   const switchFarm = (id: string) => {
     setFarmId(id);
     setManaging(false);
     setActiveAsset(null);
   };
+  const stepDate = (delta: number) => setDate((d) => addDays(d, delta));
 
   if (loading) return <div className="screen"><Header title="Diesel" backHref="/" /><Spinner /></div>;
   if (!farm) return <div className="screen"><Header title="Diesel" backHref="/" /><div className="empty">No farms found.</div></div>;
+
+  const unitLabel = (a: DieselAsset) => (a.unit === "HOURS" ? "h" : "km");
+  const rateLabel = (a: DieselAsset) => (a.unit === "HOURS" ? "L/h" : "km/L");
 
   return (
     <div className="screen">
@@ -55,9 +82,10 @@ export default function DieselPage() {
         ))}
       </div>
 
-      <div className="add-item-bar" style={{ flexWrap: "wrap" }}>
-        <span className="field-label" style={{ width: "100%" }}>Date</span>
+      <div className="grazing-week-nav">
+        <button className="map-zoom-btn" onClick={() => stepDate(-1)} aria-label="Previous day"><ChevronLeft size={16} /></button>
         <input className="field-input small" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} />
+        <button className="map-zoom-btn" onClick={() => stepDate(1)} aria-label="Next day" disabled={date >= todayStr()}><ChevronRight size={16} /></button>
         <div style={{ flex: 1 }} />
         <button className="link-btn" onClick={() => { setManaging((v) => !v); setActiveAsset(null); }}>
           {managing ? "Done" : "Manage tractors"}
@@ -66,29 +94,57 @@ export default function DieselPage() {
 
       {managing ? (
         <ManageAssets farmId={farm.id} assets={assets} onChanged={refetchAssets} />
+      ) : activeAssets.length === 0 ? (
+        <p className="ds-note" style={{ padding: "12px 18px" }}>
+          No tractors/vehicles set up for {farm.name} yet — tap &quot;Manage tractors&quot; to add one.
+        </p>
       ) : (
-        <div className="walk-list">
-          {activeAssets.length === 0 && (
-            <p className="ds-note" style={{ padding: "12px 18px" }}>
-              No tractors/vehicles set up for {farm.name} yet — tap &quot;Manage tractors&quot; to add one.
-            </p>
-          )}
-          {activeAssets.map((a) => {
-            const e = entryByAsset.get(a.id);
-            return (
-              <button key={a.id} className="walk-row" onClick={() => setActiveAsset(a)}>
-                <span className="wr-code">{a.name}</span>
-                <span className="field-editor-sub">
-                  {a.numberPlate ? `${a.numberPlate} · ` : ""}
-                  {e
-                    ? e.worked
-                      ? `Opening ${e.openingReading ?? "—"}${a.unit === "HOURS" ? "h" : "km"}${e.litresFilled ? ` · ${e.litresFilled}L` : ""}${e.driver ? ` · ${e.driver.name}` : ""}`
-                      : "Parked"
-                    : "Not logged yet"}
-                </span>
-              </button>
-            );
-          })}
+        <div className="grazing-table-scroll">
+          <table className="grazing-table diesel-history-table">
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Driver</th>
+                <th>Opening</th>
+                <th>Closing</th>
+                <th>Usage</th>
+                <th>Litres filled</th>
+                <th>Litres used</th>
+                <th>Rate</th>
+                <th>Activity</th>
+                <th>Location</th>
+                <th>Comment</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rowsForDate.map(({ asset: a, entry: e, computed: c }) => (
+                <tr key={a.id} className="diesel-row-clickable" onClick={() => setActiveAsset(a)}>
+                  <td>{a.name}</td>
+                  {!e ? (
+                    <td colSpan={10} className="diesel-not-worked-cell">Not logged yet</td>
+                  ) : !e.worked ? (
+                    <td colSpan={10} className="diesel-not-worked-cell">Parked{e.comment ? ` — ${e.comment}` : ""}</td>
+                  ) : (
+                    <>
+                      <td>{e.driver?.name ?? "—"}</td>
+                      <td>{e.openingReading ?? "—"}{e.openingReading != null ? unitLabel(a) : ""}</td>
+                      <td>{c?.closing ?? "—"}{c?.closing != null ? unitLabel(a) : ""}</td>
+                      <td>{c?.hours ?? "—"}{c?.hours != null ? unitLabel(a) : ""}</td>
+                      <td>{e.litresFilled ?? "—"}{e.litresFilled != null ? "L" : ""}</td>
+                      <td>{c?.litresUsed ?? "—"}{c?.litresUsed != null ? "L" : ""}</td>
+                      <td>{c?.rate ?? "—"}{c?.rate != null ? ` ${rateLabel(a)}` : ""}</td>
+                      <td>{e.activities.join(", ") || "—"}</td>
+                      <td>{e.paddockCodes.join(", ") || "—"}</td>
+                      <td>{e.comment ?? ""}</td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="field-hint" style={{ padding: "8px 18px" }}>
+            Use ‹ / › to step a day at a time and check consumption as you fill in each one — Closing/Usage/Rate fill in once the next day exists.
+          </p>
         </div>
       )}
 
@@ -99,7 +155,9 @@ export default function DieselPage() {
           farmName={farm.name}
           paddocks={farm.paddocks}
           workers={workers}
-          existingEntry={entryByAsset.get(activeAsset.id) ?? null}
+          activityTypes={activityTypes}
+          priorEntries={entriesByAsset.get(activeAsset.id) ?? []}
+          existingEntry={(entriesByAsset.get(activeAsset.id) ?? []).find((e) => e.date === date) ?? null}
           onClose={() => setActiveAsset(null)}
           onSaved={() => { setActiveAsset(null); refetchEntries(); }}
         />
@@ -125,6 +183,13 @@ function ManageAssets({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPlate, setEditPlate] = useState("");
+  const [editUnit, setEditUnit] = useState<"HOURS" | "KM">("HOURS");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   const handleAdd = async () => {
     if (!name.trim()) return;
     setAdding(true);
@@ -143,6 +208,33 @@ function ManageAssets({
     setName("");
     setNumberPlate("");
     setUnit("HOURS");
+    onChanged();
+  };
+
+  const startEdit = (a: DieselAsset) => {
+    setEditingId(a.id);
+    setEditName(a.name);
+    setEditPlate(a.numberPlate ?? "");
+    setEditUnit(a.unit);
+    setEditError(null);
+  };
+
+  const handleEditSave = async () => {
+    if (!editingId || !editName.trim()) return;
+    setEditSaving(true);
+    setEditError(null);
+    const res = await fetch(`/api/diesel-assets/${editingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: editName.trim(), numberPlate: editPlate.trim() || null, unit: editUnit }),
+    });
+    setEditSaving(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => null);
+      setEditError(json?.error || "Couldn't save that — try again.");
+      return;
+    }
+    setEditingId(null);
     onChanged();
   };
 
@@ -188,24 +280,43 @@ function ManageAssets({
       {error && <p className="error-note" style={{ padding: "0 18px" }}>{error}</p>}
       {deleteError && <p className="error-note" style={{ padding: "0 18px" }}>{deleteError}</p>}
 
-      {assets.map((a) => (
-        <div key={a.id} className="settings-row">
-          <div className="settings-row-head">
-            <span className="settings-row-title">{a.name}{!a.active ? " (inactive)" : ""}</span>
-            <span className="mr-sub">{a.numberPlate || "No plate"} · {a.unit === "HOURS" ? "Hours" : "Km"}</span>
-          </div>
-          <div style={{ display: "flex", gap: 14 }}>
-            <Link className="link-btn" href={`/diesel/history?assetId=${a.id}`}>
-              <History size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />History
-            </Link>
-            <button className="link-btn" onClick={() => toggleActive(a)}>{a.active ? "Mark inactive" : "Mark active"}</button>
-            <button className="link-btn" onClick={() => handleDelete(a.id)}>
-              <Trash2 size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-              {confirmDeleteId === a.id ? "Confirm delete" : "Delete"}
+      {assets.map((a) =>
+        editingId === a.id ? (
+          <div key={a.id} className="add-item-bar" style={{ flexWrap: "wrap" }}>
+            <input className="field-input small" value={editName} onChange={(e) => setEditName(e.target.value)} />
+            <input className="field-input small" value={editPlate} onChange={(e) => setEditPlate(e.target.value)} placeholder="Number plate" />
+            <select className="field-input small" value={editUnit} onChange={(e) => setEditUnit(e.target.value as "HOURS" | "KM")}>
+              <option value="HOURS">Hours</option>
+              <option value="KM">Km</option>
+            </select>
+            <button className="save-btn small" onClick={handleEditSave} disabled={editSaving || !editName.trim()}>
+              {editSaving ? "Saving…" : "Save"}
             </button>
+            <button className="link-btn" onClick={() => setEditingId(null)}>Cancel</button>
+            {editError && <p className="error-note" style={{ width: "100%" }}>{editError}</p>}
           </div>
-        </div>
-      ))}
+        ) : (
+          <div key={a.id} className="settings-row">
+            <div className="settings-row-head">
+              <span className="settings-row-title">{a.name}{!a.active ? " (inactive)" : ""}</span>
+              <span className="mr-sub">{a.numberPlate || "No plate"} · {a.unit === "HOURS" ? "Hours" : "Km"}</span>
+            </div>
+            <div style={{ display: "flex", gap: 14 }}>
+              <button className="link-btn" onClick={() => startEdit(a)}>
+                <Pencil size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />Edit
+              </button>
+              <Link className="link-btn" href={`/diesel/history?assetId=${a.id}`}>
+                <History size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />History
+              </Link>
+              <button className="link-btn" onClick={() => toggleActive(a)}>{a.active ? "Mark inactive" : "Mark active"}</button>
+              <button className="link-btn" onClick={() => handleDelete(a.id)}>
+                <Trash2 size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                {confirmDeleteId === a.id ? "Confirm delete" : "Delete"}
+              </button>
+            </div>
+          </div>
+        )
+      )}
     </div>
   );
 }
@@ -216,6 +327,8 @@ function AssetEntryPanel({
   farmName,
   paddocks,
   workers,
+  activityTypes,
+  priorEntries,
   existingEntry,
   onClose,
   onSaved,
@@ -225,6 +338,8 @@ function AssetEntryPanel({
   farmName: string;
   paddocks: Farm["paddocks"];
   workers: Worker[];
+  activityTypes: DieselActivityType[];
+  priorEntries: DieselLogEntry[];
   existingEntry: DieselLogEntry | null;
   onClose: () => void;
   onSaved: () => void;
@@ -241,15 +356,12 @@ function AssetEntryPanel({
 
   // Sticky driver default: if there's no entry yet for this exact date, use
   // whoever drove it most recently, so most days you don't touch the dropdown.
-  const { data: historyData } = useApi<{ entries: DieselLogEntry[] }>(
-    !existingEntry ? `/api/diesel-entries?assetId=${asset.id}` : null
-  );
   useEffect(() => {
     if (existingEntry || driverId) return;
-    const prior = (historyData?.entries ?? []).find((e) => e.date < date && e.driverId);
+    const prior = priorEntries.filter((e) => e.date < date && e.driverId).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
     if (prior?.driverId) setDriverId(prior.driverId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyData]);
+  }, []);
 
   const orderedPaddocks = useMemo(() => [...paddocks].sort(byPaddockNumber), [paddocks]);
 
@@ -343,13 +455,19 @@ function AssetEntryPanel({
 
               <div className="field">
                 <span className="field-label">Activity ({activities.length} selected)</span>
-                <div className="chip-wrap">
-                  {DIESEL_ACTIVITIES.map((a) => (
-                    <button key={a} className={`paddock-chip fert-chip${activities.includes(a) ? " on" : ""}`} onClick={() => toggleActivity(a)}>
-                      {a}
-                    </button>
-                  ))}
-                </div>
+                {activityTypes.length === 0 ? (
+                  <p className="field-hint">
+                    No activities set up yet — add some in Settings &gt; Diesel activities.
+                  </p>
+                ) : (
+                  <div className="chip-wrap">
+                    {activityTypes.map((a) => (
+                      <button key={a.id} className={`paddock-chip fert-chip${activities.includes(a.name) ? " on" : ""}`} onClick={() => toggleActivity(a.name)}>
+                        {a.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="paddock-picker-head">

@@ -245,6 +245,15 @@ model ChemicalType {
   createdAt DateTime @default(now())
 }
 
+// The activity options offered on a diesel log entry — editable in Settings
+// rather than fixed, like ChemicalType/FertilizerType.
+model DieselActivityType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
 model SeedVariety {
   id        String   @id @default(cuid())
   cropType  String // "Rye grass" | "Maize" | ...

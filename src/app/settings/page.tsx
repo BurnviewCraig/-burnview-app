@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Sprout, FlaskConical, Leaf, ChevronRight } from "lucide-react";
+import { Users, Sprout, FlaskConical, Leaf, Fuel, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
 
 export default function SettingsPage() {
@@ -36,6 +36,14 @@ export default function SettingsPage() {
           <div className="menu-row-text">
             <span className="mr-title">Seed varieties</span>
             <span className="mr-sub">Named cultivars for any crop, used in the Planting form</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+        <Link className="menu-row" href="/settings/diesel-activities">
+          <Fuel size={18} strokeWidth={1.75} />
+          <div className="menu-row-text">
+            <span className="mr-title">Diesel activities</span>
+            <span className="mr-sub">Activity options used when logging diesel use</span>
           </div>
           <ChevronRight size={16} />
         </Link>

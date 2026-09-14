@@ -8,6 +8,7 @@ import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { addDays } from "@/lib/calendarFormat";
+import { computeDieselByDate } from "@/lib/dieselCalc";
 import type { DieselAsset, DieselLogEntry } from "@/lib/types";
 
 type AssetWithFarm = DieselAsset & { farm: { id: string; name: string } };
@@ -27,9 +28,6 @@ type DisplayRow = {
   comment: string | null;
 };
 
-const round1 = (n: number) => Math.round(n * 10) / 10;
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
 function DieselHistoryContent() {
   const params = useSearchParams();
   const assetId = params.get("assetId");
@@ -42,44 +40,10 @@ function DieselHistoryContent() {
   const [from, setFrom] = useState(addDays(todayStr(), -90));
   const [to, setTo] = useState(todayStr());
 
-  // Fuel isn't necessarily filled every day, so a fill on day F pays for
-  // every WORKED day since the previous fill (not just yesterday) —
-  // prorated by each of those days' own share of hours/km worked, with one
-  // averaged rate across the whole stretch. Computed over ALL history
-  // (not just the print window) so a fill just outside the range still
-  // prorates correctly into days inside it.
+  // Computed over ALL history (not just the print window) so a fill just
+  // outside the range still prorates correctly into days inside it.
   const byDate = useMemo(() => {
-    const worked = entries
-      .filter((e) => e.worked && e.openingReading != null)
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    const computed = new Map<string, { closing: number | null; hours: number | null; litresUsed: number | null; rate: number | null }>();
-    worked.forEach((e) => {
-      const next = worked[worked.indexOf(e) + 1];
-      const closing = next?.openingReading ?? null;
-      const hours = closing != null && e.openingReading != null ? round1(closing - e.openingReading) : null;
-      computed.set(e.date, { closing, hours, litresUsed: null, rate: null });
-    });
-
-    let segmentStart = 0;
-    worked.forEach((e, i) => {
-      if (e.litresFilled == null) return;
-      const start = worked[segmentStart];
-      const usageTotal = start.openingReading != null && e.openingReading != null ? e.openingReading - start.openingReading : null;
-      if (usageTotal != null && usageTotal > 0) {
-        const rate = asset?.unit === "KM" ? round2(usageTotal / e.litresFilled) : round2(e.litresFilled / usageTotal);
-        for (let j = segmentStart; j < i; j++) {
-          const dj = worked[j];
-          const c = computed.get(dj.date);
-          if (c && c.hours != null) {
-            c.litresUsed = round1(e.litresFilled * (c.hours / usageTotal));
-            c.rate = rate;
-          }
-        }
-      }
-      segmentStart = i;
-    });
-
+    const computed = computeDieselByDate(entries, asset?.unit ?? "HOURS");
     const map = new Map<string, DisplayRow>();
     entries.forEach((e) => {
       const c = computed.get(e.date);

@@ -34,10 +34,11 @@ function serialize(e: {
   };
 }
 
-// Either ?assetId= (that asset's full history, for the daily dashboard's
-// "last used driver" lookup and the per-asset printable report) or
-// ?farmId=&date= (one day's entries across a farm's assets, for the
-// dashboard).
+// ?assetId= (that asset's full history — the per-asset printable report),
+// ?farmId=&date= (one day across a farm's assets), or ?farmId= alone (that
+// farm's full history across all its assets, so the daily dashboard can
+// show computed closing/usage/rate — see lib/dieselCalc.ts — for whichever
+// date is selected, not just raw entered values).
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const assetId = searchParams.get("assetId");
@@ -57,6 +58,15 @@ export async function GET(req: Request) {
     const entries = await prisma.dieselLogEntry.findMany({
       where: { date: new Date(date), asset: { farmId } },
       include: { driver: { select: { id: true, name: true } } },
+    });
+    return NextResponse.json({ entries: entries.map(serialize) });
+  }
+
+  if (farmId) {
+    const entries = await prisma.dieselLogEntry.findMany({
+      where: { asset: { farmId } },
+      include: { driver: { select: { id: true, name: true } } },
+      orderBy: { date: "desc" },
     });
     return NextResponse.json({ entries: entries.map(serialize) });
   }
