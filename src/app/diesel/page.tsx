@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { X, Plus, Trash2, History, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
+import { X, Plus, Trash2, History, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Pencil } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
@@ -264,6 +264,27 @@ function ManageAssets({
     onChanged();
   };
 
+  // Re-persists the whole list's order (not just the two being swapped) —
+  // existing rows may all share the same sortOrder from before reordering
+  // was possible, so this also normalizes them the first time it's used.
+  const handleMove = async (id: string, direction: -1 | 1) => {
+    const idx = assets.findIndex((a) => a.id === id);
+    const swapIdx = idx + direction;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= assets.length) return;
+    const reordered = [...assets];
+    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+    await Promise.all(
+      reordered.map((a, i) =>
+        fetch(`/api/diesel-assets/${a.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sortOrder: i }),
+        })
+      )
+    );
+    onChanged();
+  };
+
   return (
     <div className="walk-list">
       <div className="add-item-bar" style={{ flexWrap: "wrap" }}>
@@ -298,7 +319,27 @@ function ManageAssets({
         ) : (
           <div key={a.id} className="settings-row">
             <div className="settings-row-head">
-              <span className="settings-row-title">{a.name}{!a.active ? " (inactive)" : ""}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <button
+                    className="link-btn"
+                    onClick={() => handleMove(a.id, -1)}
+                    disabled={assets.findIndex((x) => x.id === a.id) === 0}
+                    aria-label={`Move ${a.name} up`}
+                  >
+                    <ChevronUp size={14} />
+                  </button>
+                  <button
+                    className="link-btn"
+                    onClick={() => handleMove(a.id, 1)}
+                    disabled={assets.findIndex((x) => x.id === a.id) === assets.length - 1}
+                    aria-label={`Move ${a.name} down`}
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+                <span className="settings-row-title">{a.name}{!a.active ? " (inactive)" : ""}</span>
+              </div>
               <span className="mr-sub">{a.numberPlate || "No plate"} · {a.unit === "HOURS" ? "Hours" : "Km"}</span>
             </div>
             <div style={{ display: "flex", gap: 14 }}>

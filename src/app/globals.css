@@ -212,6 +212,8 @@ a:visited { color: var(--ink); }
 .paddock-picker-actions { display:flex; gap: 12px; }
 .link-btn { background:none; border:none; font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--normal); cursor: pointer; padding: 0; }
 .link-btn:hover { text-decoration: underline; }
+.link-btn:disabled { opacity: 0.35; cursor: default; }
+.link-btn:disabled:hover { text-decoration: none; }
 .paddock-picker-list { padding: 0 18px 12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; align-content:flex-start; }
 .paddock-chip { position:relative; padding: 9px 4px; border-radius: 7px; border: 1px solid var(--paper-deep); background: var(--card); font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
 .paddock-chip.on { background: var(--normal); color: white; border-color: var(--normal); }

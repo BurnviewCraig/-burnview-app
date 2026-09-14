@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const data: { name?: string; numberPlate?: string | null; unit?: "HOURS" | "KM"; active?: boolean } = {};
+  const data: { name?: string; numberPlate?: string | null; unit?: "HOURS" | "KM"; active?: boolean; sortOrder?: number } = {};
   if ("name" in body) {
     const name = String(body.name).trim();
     if (!name) return NextResponse.json({ error: "Name can't be empty" }, { status: 400 });
@@ -23,6 +23,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if ("numberPlate" in body) data.numberPlate = body.numberPlate?.trim() || null;
   if ("unit" in body) data.unit = body.unit === "KM" ? "KM" : "HOURS";
   if ("active" in body) data.active = !!body.active;
+  if ("sortOrder" in body) data.sortOrder = Number(body.sortOrder);
 
   try {
     const asset = await prisma.dieselAsset.update({ where: { id }, data });
