@@ -23,6 +23,7 @@ model User {
   milkProductionEntries MilkProductionEntry[]
   milkSaleEntries MilkSaleEntry[]
   rainfallEntries RainfallEntry[]
+  dieselLogEntries DieselLogEntry[]
 }
 
 model Farm {
@@ -42,6 +43,7 @@ model Farm {
   orderNumbers    OrderNumber[]
   milkSales       MilkSaleEntry[]
   rainfallEntries RainfallEntry[]
+  dieselAssets    DieselAsset[]
 }
 
 model Paddock {
@@ -332,8 +334,9 @@ model Worker {
   sortOrder Int             @default(0)
   createdAt DateTime        @default(now())
 
-  farm    Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
-  entries TimeBookEntry[]
+  farm         Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  entries      TimeBookEntry[]
+  dieselTrips  DieselLogEntry[]
 
   @@index([farmId, section])
 }
@@ -391,4 +394,60 @@ model RainfallEntry {
   createdBy User? @relation(fields: [createdById], references: [id])
 
   @@unique([farmId, date])
+}
+
+enum DieselUnit {
+  HOURS
+  KM
+}
+
+// A tractor/vehicle with a preset number plate. unit decides whether its
+// meter reads hours (tractors) or km (bakkies/trucks) — drives which
+// consumption figure (L/hour vs km/L) gets computed for it.
+model DieselAsset {
+  id          String     @id @default(cuid())
+  farmId      String
+  name        String
+  numberPlate String?
+  unit        DieselUnit @default(HOURS)
+  active      Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+
+  farm    Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  entries DieselLogEntry[]
+
+  @@unique([farmId, name])
+}
+
+// One asset's log for one day — this is the SARS diesel-rebate logbook.
+// closingReading isn't stored: it's the next day's openingReading for the
+// same asset, read live, so there's exactly one number per day and it can
+// never drift out of sync. litresFilled on a day is treated as topping the
+// tank back up to full, i.e. it represents the PREVIOUS day's consumption —
+// litres/hour (or km/litre) for day D is computed from usage on day D
+// (opening D+1 minus opening D) against litresFilled on day D+1.
+// paddockCodes/activities are snapshotted as plain strings rather than
+// relations, since this is a compliance record that must not silently
+// change if a paddock is later renamed or an activity list edited.
+model DieselLogEntry {
+  id             String   @id @default(cuid())
+  assetId        String
+  date           DateTime @db.Date
+  openingReading Float?
+  litresFilled   Float?
+  driverId       String?
+  activities     Json? // string[]
+  paddockCodes   Json? // string[]
+  comment        String? // e.g. "Road trip, not field work"
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  asset     DieselAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  driver    Worker?     @relation(fields: [driverId], references: [id])
+  createdBy User?       @relation(fields: [createdById], references: [id])
+
+  @@unique([assetId, date])
 }

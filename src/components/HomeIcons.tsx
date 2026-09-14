@@ -65,6 +65,18 @@ export function FeedColorIcon({ size = 30 }: IconProps) {
   );
 }
 
+export function DieselColorIcon({ size = 30 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="5" y="7.5" width="14" height="12.5" rx="1.6" fill="#C0392B" stroke="#232A1E" strokeWidth="0.8" />
+      <rect x="9.2" y="4.2" width="5.6" height="3.3" rx="0.8" fill="#232A1E" />
+      <rect x="10.5" y="2" width="3" height="2.6" rx="0.6" fill="#232A1E" />
+      <circle cx="12" cy="14" r="2.8" fill="#E9C13A" />
+      <rect x="6.6" y="17.4" width="10.8" height="1.6" fill="#8C2F39" />
+    </svg>
+  );
+}
+
 export function StocksColorIcon({ size = 30 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">

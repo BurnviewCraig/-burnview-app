@@ -125,6 +125,27 @@ export const ACTIVITY_TYPES = [
   { id: "BAILING", name: "Bailing" },
 ] as const;
 
+// What a tractor/vehicle was doing that day, for the diesel logbook. SARS
+// only rebates diesel used for qualifying farming activity, not road use —
+// "Road / transport (not rebateable)" exists so that's visible at a glance
+// per entry, on top of the free-text comment.
+export const DIESEL_ACTIVITIES = [
+  "Ploughing",
+  "Discing",
+  "Planting",
+  "Fertilizing",
+  "Spraying",
+  "Slashing / mowing",
+  "Baling",
+  "Irrigation",
+  "Fencing",
+  "Feeding",
+  "Transport — farm",
+  "Road / transport (not rebateable)",
+  "Repairs / maintenance",
+  "Other",
+] as const;
+
 export const BALE_TYPES = [
   "Rye Grass Rapped Bales",
   "Kikuyu Rapped Bales",

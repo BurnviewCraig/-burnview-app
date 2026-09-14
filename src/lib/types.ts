@@ -180,3 +180,27 @@ export type TimeBookEntry = {
   code: "PRESENT" | "SICK" | "LEAVE" | "ABSENT" | "OFF" | null;
   overtime: string | null;
 };
+
+export type DieselAsset = {
+  id: string;
+  farmId: string;
+  name: string;
+  numberPlate: string | null;
+  unit: "HOURS" | "KM";
+  active: boolean;
+  sortOrder: number;
+};
+
+export type DieselLogEntry = {
+  id: string;
+  assetId: string;
+  date: string;
+  openingReading: number | null;
+  litresFilled: number | null;
+  driverId: string | null;
+  driver: { id: string; name: string } | null;
+  activities: string[];
+  paddockCodes: string[];
+  comment: string | null;
+  createdAt: string;
+};
