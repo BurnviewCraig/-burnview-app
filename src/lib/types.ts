@@ -195,6 +195,7 @@ export type DieselLogEntry = {
   id: string;
   assetId: string;
   date: string;
+  worked: boolean;
   openingReading: number | null;
   litresFilled: number | null;
   driverId: string | null;

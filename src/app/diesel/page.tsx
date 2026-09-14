@@ -81,7 +81,9 @@ export default function DieselPage() {
                 <span className="field-editor-sub">
                   {a.numberPlate ? `${a.numberPlate} · ` : ""}
                   {e
-                    ? `Opening ${e.openingReading ?? "—"}${a.unit === "HOURS" ? "h" : "km"}${e.litresFilled ? ` · ${e.litresFilled}L` : ""}${e.driver ? ` · ${e.driver.name}` : ""}`
+                    ? e.worked
+                      ? `Opening ${e.openingReading ?? "—"}${a.unit === "HOURS" ? "h" : "km"}${e.litresFilled ? ` · ${e.litresFilled}L` : ""}${e.driver ? ` · ${e.driver.name}` : ""}`
+                      : "Parked"
                     : "Not logged yet"}
                 </span>
               </button>
@@ -227,6 +229,7 @@ function AssetEntryPanel({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const [worked, setWorked] = useState(existingEntry?.worked ?? true);
   const [driverId, setDriverId] = useState(existingEntry?.driverId ?? "");
   const [opening, setOpening] = useState(existingEntry?.openingReading != null ? String(existingEntry.openingReading) : "");
   const [litres, setLitres] = useState(existingEntry?.litresFilled != null ? String(existingEntry.litresFilled) : "");
@@ -263,6 +266,7 @@ function AssetEntryPanel({
       body: JSON.stringify({
         assetId: asset.id,
         date,
+        worked,
         openingReading: opening !== "" ? Number(opening) : null,
         litresFilled: litres !== "" ? Number(litres) : null,
         driverId: driverId || null,
@@ -299,63 +303,75 @@ function AssetEntryPanel({
         </div>
 
         <div className="edit-entry-body">
-          <label className="field">
-            <span className="field-label">Driver</span>
-            <select className="field-input" value={driverId} onChange={(e) => setDriverId(e.target.value)}>
-              <option value="">(none)</option>
-              {workers.map((w) => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span className="field-label">Opening {asset.unit === "HOURS" ? "hours" : "km"}</span>
-            <input
-              className="field-input"
-              type="number"
-              inputMode="decimal"
-              value={opening}
-              onChange={(e) => setOpening(e.target.value)}
-              placeholder={asset.unit === "HOURS" ? "e.g. 1204.5" : "e.g. 88210"}
-            />
-          </label>
-
-          <label className="field">
-            <span className="field-label">Litres filled today</span>
-            <input className="field-input" type="number" inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} placeholder="Litres" />
-            <span className="field-hint">This tops up to full — it&apos;s treated as yesterday&apos;s usage when working out the rate.</span>
-          </label>
-
           <div className="field">
-            <span className="field-label">Activity ({activities.length} selected)</span>
+            <span className="field-label">Today</span>
             <div className="chip-wrap">
-              {DIESEL_ACTIVITIES.map((a) => (
-                <button key={a} className={`paddock-chip fert-chip${activities.includes(a) ? " on" : ""}`} onClick={() => toggleActivity(a)}>
-                  {a}
-                </button>
-              ))}
+              <button className={`range-chip${worked ? " on" : ""}`} onClick={() => setWorked(true)}>Worked</button>
+              <button className={`range-chip${!worked ? " on" : ""}`} onClick={() => setWorked(false)}>Parked</button>
             </div>
           </div>
 
-          <div className="paddock-picker-head">
-            <span className="field-label">Location ({paddockCodes.length} selected)</span>
-            <div className="paddock-picker-actions">
-              <button className="link-btn" onClick={() => setPaddockCodes(orderedPaddocks.map((p) => p.code))}>Select all</button>
-              <button className="link-btn" onClick={() => setPaddockCodes([])}>Clear</button>
-            </div>
-          </div>
-          <div className="paddock-picker-list">
-            {orderedPaddocks.map((p) => {
-              const on = paddockCodes.includes(p.code);
-              return (
-                <button key={p.id} className={`paddock-chip${on ? " on" : ""}`} onClick={() => togglePaddock(p.code)}>
-                  <span className="paddock-chip-check">{on ? "✓" : ""}</span>
-                  {p.code}
-                </button>
-              );
-            })}
-          </div>
+          {worked && (
+            <>
+              <label className="field">
+                <span className="field-label">Driver</span>
+                <select className="field-input" value={driverId} onChange={(e) => setDriverId(e.target.value)}>
+                  <option value="">(none)</option>
+                  {workers.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span className="field-label">Opening {asset.unit === "HOURS" ? "hours" : "km"}</span>
+                <input
+                  className="field-input"
+                  type="number"
+                  inputMode="decimal"
+                  value={opening}
+                  onChange={(e) => setOpening(e.target.value)}
+                  placeholder={asset.unit === "HOURS" ? "e.g. 1204.5" : "e.g. 88210"}
+                />
+              </label>
+
+              <label className="field">
+                <span className="field-label">Litres filled (only on a fill day)</span>
+                <input className="field-input" type="number" inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} placeholder="Leave blank if you didn't fill today" />
+                <span className="field-hint">Doesn&apos;t need to be every day — if it&apos;s a few days between fills, this fill gets spread back over the days worked since the last one, by hours/km worked each day.</span>
+              </label>
+
+              <div className="field">
+                <span className="field-label">Activity ({activities.length} selected)</span>
+                <div className="chip-wrap">
+                  {DIESEL_ACTIVITIES.map((a) => (
+                    <button key={a} className={`paddock-chip fert-chip${activities.includes(a) ? " on" : ""}`} onClick={() => toggleActivity(a)}>
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="paddock-picker-head">
+                <span className="field-label">Location ({paddockCodes.length} selected)</span>
+                <div className="paddock-picker-actions">
+                  <button className="link-btn" onClick={() => setPaddockCodes(orderedPaddocks.map((p) => p.code))}>Select all</button>
+                  <button className="link-btn" onClick={() => setPaddockCodes([])}>Clear</button>
+                </div>
+              </div>
+              <div className="paddock-picker-list">
+                {orderedPaddocks.map((p) => {
+                  const on = paddockCodes.includes(p.code);
+                  return (
+                    <button key={p.id} className={`paddock-chip${on ? " on" : ""}`} onClick={() => togglePaddock(p.code)}>
+                      <span className="paddock-chip-check">{on ? "✓" : ""}</span>
+                      {p.code}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           <label className="field" style={{ marginTop: 10 }}>
             <span className="field-label">Comment</span>
@@ -364,7 +380,7 @@ function AssetEntryPanel({
               rows={2}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="e.g. Road trip, not field work"
+              placeholder={worked ? "e.g. Road trip, not field work" : "e.g. In for repairs"}
             />
           </label>
 

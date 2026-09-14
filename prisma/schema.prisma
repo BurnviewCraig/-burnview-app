@@ -421,12 +421,22 @@ model DieselAsset {
 }
 
 // One asset's log for one day — this is the SARS diesel-rebate logbook.
-// closingReading isn't stored: it's the next day's openingReading for the
-// same asset, read live, so there's exactly one number per day and it can
-// never drift out of sync. litresFilled on a day is treated as topping the
-// tank back up to full, i.e. it represents the PREVIOUS day's consumption —
-// litres/hour (or km/litre) for day D is computed from usage on day D
-// (opening D+1 minus opening D) against litresFilled on day D+1.
+// worked=false is a "parked" day: the tractor didn't move, so every other
+// field is blank and it contributes nothing to the readings below. A day
+// with no row at all prints the same way ("not worked"), so a printed
+// range always has one line per calendar day regardless of how many were
+// actually worked.
+//
+// closingReading isn't stored: it's the next WORKED day's openingReading
+// for the same asset (skipping over any parked days in between), read
+// live so it can never drift out of sync. Fuel isn't necessarily filled
+// every day — litresFilled is only set on the (worked) day a fill actually
+// happens, and it tops the tank back up to full, so it pays for every
+// worked day's usage since the PREVIOUS fill. That total is prorated across
+// those days by each day's share of the hours/km worked in between, and
+// the displayed rate (L/hour or km/L) for that whole stretch is one
+// average — see the computation in app/diesel/history/page.tsx.
+//
 // paddockCodes/activities are snapshotted as plain strings rather than
 // relations, since this is a compliance record that must not silently
 // change if a paddock is later renamed or an activity list edited.
@@ -434,12 +444,13 @@ model DieselLogEntry {
   id             String   @id @default(cuid())
   assetId        String
   date           DateTime @db.Date
+  worked         Boolean  @default(true)
   openingReading Float?
   litresFilled   Float?
   driverId       String?
   activities     Json? // string[]
   paddockCodes   Json? // string[]
-  comment        String? // e.g. "Road trip, not field work"
+  comment        String? // e.g. "Road trip, not field work" or "In for repairs"
 
   createdById String?
   createdAt   DateTime @default(now())

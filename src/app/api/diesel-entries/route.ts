@@ -8,6 +8,7 @@ function serialize(e: {
   id: string;
   assetId: string;
   date: Date;
+  worked: boolean;
   openingReading: number | null;
   litresFilled: number | null;
   driverId: string | null;
@@ -21,6 +22,7 @@ function serialize(e: {
     id: e.id,
     assetId: e.assetId,
     date: e.date.toISOString().slice(0, 10),
+    worked: e.worked,
     openingReading: e.openingReading,
     litresFilled: e.litresFilled,
     driverId: e.driverId,
@@ -63,12 +65,16 @@ export async function GET(req: Request) {
 }
 
 // Upsert — one entry per asset per day. Each day's row is independent (its
-// own driverId/readings), so correcting one day never touches another.
+// own driverId/readings), so correcting one day never touches another. A
+// parked (worked:false) day is forced blank server-side regardless of what
+// the client sends — it must never carry a reading/fill into the pro-rating
+// math in the history report.
 export async function POST(req: Request) {
   const body = await req.json();
   const {
     assetId,
     date,
+    worked,
     openingReading,
     litresFilled,
     driverId,
@@ -78,6 +84,7 @@ export async function POST(req: Request) {
   }: {
     assetId?: string;
     date?: string;
+    worked?: boolean;
     openingReading?: number | null;
     litresFilled?: number | null;
     driverId?: string | null;
@@ -89,15 +96,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "assetId and date are required" }, { status: 400 });
   }
   const userId = await currentUserId();
-  const data = {
-    openingReading: openingReading ?? null,
-    litresFilled: litresFilled ?? null,
-    driverId: driverId || null,
-    activities: activities ?? [],
-    paddockCodes: paddockCodes ?? [],
-    comment: comment?.trim() || null,
-    createdById: userId,
-  };
+  const isWorked = worked !== false;
+  const data = isWorked
+    ? {
+        worked: true,
+        openingReading: openingReading ?? null,
+        litresFilled: litresFilled ?? null,
+        driverId: driverId || null,
+        activities: activities ?? [],
+        paddockCodes: paddockCodes ?? [],
+        comment: comment?.trim() || null,
+        createdById: userId,
+      }
+    : {
+        worked: false,
+        openingReading: null,
+        litresFilled: null,
+        driverId: null,
+        activities: [],
+        paddockCodes: [],
+        comment: comment?.trim() || null,
+        createdById: userId,
+      };
   const entry = await prisma.dieselLogEntry.upsert({
     where: { assetId_date: { assetId, date: new Date(date) } },
     update: data,
