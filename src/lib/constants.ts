@@ -176,6 +176,7 @@ export const NUTRIENT_RANGES = [
 
 // Range selector for the milk (production/sold) trend charts.
 export const MILK_CHART_RANGES = [
+  { id: "14d", label: "14 days" },
   { id: "1m", label: "1 month" },
   { id: "3m", label: "3 months" },
   { id: "ytd", label: "Year to date" },

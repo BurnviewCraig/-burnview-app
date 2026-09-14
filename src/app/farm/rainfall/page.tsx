@@ -74,40 +74,42 @@ export default function RainfallPage() {
         ))}
       </div>
 
-      <div className="form" style={{ padding: "12px 18px", gap: 12 }}>
-        <label className="field">
-          <span className="field-label">Rainfall (mm)</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input className="field-input" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
-            <input className="field-input" type="number" inputMode="decimal" value={mm} onChange={(e) => setMm(e.target.value)} placeholder="mm" style={{ width: 90 }} />
-          </div>
-        </label>
-        <button className="save-btn" onClick={handleSave} disabled={saving || mm === ""}>
-          {saving ? "Saving…" : "Save rainfall"}
-        </button>
-      </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <div className="form" style={{ padding: "12px 18px", gap: 12 }}>
+          <label className="field">
+            <span className="field-label">Rainfall (mm)</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input className="field-input" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
+              <input className="field-input" type="number" inputMode="decimal" value={mm} onChange={(e) => setMm(e.target.value)} placeholder="mm" style={{ width: 90 }} />
+            </div>
+          </label>
+          <button className="save-btn" onClick={handleSave} disabled={saving || mm === ""}>
+            {saving ? "Saving…" : "Save rainfall"}
+          </button>
+        </div>
 
-      {monthlyTotals.length > 0 && (
-        <div className="wedge-info-box" style={{ margin: "0 18px 14px" }}>
-          {monthlyTotals.slice(0, 6).map((m) => (
-            <div key={m.month}><span className="wib-k">{m.label}</span><span className="wib-v">{m.total}mm</span></div>
+        {monthlyTotals.length > 0 && (
+          <div className="wedge-info-box" style={{ margin: "0 18px 14px" }}>
+            {monthlyTotals.slice(0, 6).map((m) => (
+              <div key={m.month}><span className="wib-k">{m.label}</span><span className="wib-v">{m.total}mm</span></div>
+            ))}
+          </div>
+        )}
+
+        <div className="field" style={{ padding: "0 18px 18px" }}>
+          <span className="field-label">History</span>
+          {entries.length === 0 && <p className="ds-note">No rainfall logged yet for {farm.name}.</p>}
+          {entries.map((e) => (
+            <div key={e.id} className="settings-row">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="mr-sub">{e.date.slice(0, 10)} — {e.mm}mm</span>
+                <button className="link-btn" onClick={() => handleDelete(e.id)} aria-label="Delete rainfall entry">
+                  <Trash2 size={14} strokeWidth={1.75} />
+                </button>
+              </div>
+            </div>
           ))}
         </div>
-      )}
-
-      <div className="field" style={{ padding: "0 18px 18px" }}>
-        <span className="field-label">History</span>
-        {entries.length === 0 && <p className="ds-note">No rainfall logged yet for {farm.name}.</p>}
-        {entries.map((e) => (
-          <div key={e.id} className="settings-row">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span className="mr-sub">{e.date.slice(0, 10)} — {e.mm}mm</span>
-              <button className="link-btn" onClick={() => handleDelete(e.id)} aria-label="Delete rainfall entry">
-                <Trash2 size={14} strokeWidth={1.75} />
-              </button>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );

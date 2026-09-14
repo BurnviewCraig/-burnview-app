@@ -27,7 +27,7 @@ function MilkSoldForm() {
   const [takenBy, setTakenBy] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [range, setRange] = useState<ChartRange>("1m");
+  const [range, setRange] = useState<ChartRange>("14d");
 
   const { data, refetch } = useApi<{ entries: MilkSaleEntry[] }>(farm ? `/api/milk-sales?farmId=${farm.id}` : null);
   const entries = data?.entries ?? [];
@@ -119,59 +119,61 @@ function MilkSoldForm() {
         ))}
       </div>
 
-      <div className="wedge-info-box" style={{ margin: "12px 18px 0" }}>
-        <div><span className="wib-k">This month</span><span className="wib-v">{monthComparison.thisTotal}L</span></div>
-        <div><span className="wib-k">Last month</span><span className="wib-v">{monthComparison.lastTotal}L</span></div>
-        {monthComparison.pct != null && (
-          <div><span className="wib-k">Change</span><span className="wib-v">{monthComparison.pct > 0 ? "+" : ""}{monthComparison.pct}%</span></div>
-        )}
-      </div>
-
-      <div style={{ padding: "12px 18px 0" }}>
-        <TrendChart points={dailyTotals} range={range} onRangeChange={setRange} unit="L" yLabel="Litres sold" />
-      </div>
-
-      <div className="form" style={{ padding: "12px 18px", gap: 12 }}>
-        <p className="ds-note">
-          A farm can have several buyers collecting on the same day — each save here adds a new collection rather than replacing the day&apos;s total.
-        </p>
-
-        <label className="field">
-          <span className="field-label">Litres sold</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input className="field-input" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
-            <input className="field-input" type="number" inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} placeholder="Litres" style={{ width: 90 }} />
-          </div>
-        </label>
-
-        <label className="field">
-          <span className="field-label">Taken by</span>
-          <input className="field-input" value={takenBy} onChange={(e) => setTakenBy(e.target.value)} placeholder="e.g. driver, company or buyer name" />
-        </label>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="save-btn" onClick={handleSave} disabled={saving || litres === ""}>
-            {saving ? "Saving…" : editingId ? "Save changes" : "Save milk sold"}
-          </button>
-          {editingId && <button className="link-btn" onClick={resetForm}>Cancel edit</button>}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <div className="wedge-info-box" style={{ margin: "12px 18px 0" }}>
+          <div><span className="wib-k">This month</span><span className="wib-v">{monthComparison.thisTotal}L</span></div>
+          <div><span className="wib-k">Last month</span><span className="wib-v">{monthComparison.lastTotal}L</span></div>
+          {monthComparison.pct != null && (
+            <div><span className="wib-k">Change</span><span className="wib-v">{monthComparison.pct > 0 ? "+" : ""}{monthComparison.pct}%</span></div>
+          )}
         </div>
-      </div>
 
-      <div className="field" style={{ padding: "0 18px 18px" }}>
-        <span className="field-label">History</span>
-        {entries.length === 0 && <p className="ds-note">No milk sold logged yet for {farm.name}.</p>}
-        {entries.map((e) => (
-          <div key={e.id} className={`settings-row${editingId === e.id ? " active" : ""}`}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <button className="link-btn" style={{ textAlign: "left" }} onClick={() => startEdit(e)}>
-                {e.date.slice(0, 10)} — {e.litres}L{e.takenBy ? ` — ${e.takenBy}` : ""}
-              </button>
-              <button className="link-btn" onClick={() => handleDelete(e.id)} aria-label="Delete milk sale">
-                <Trash2 size={14} strokeWidth={1.75} />
-              </button>
+        <div style={{ padding: "12px 18px 0" }}>
+          <TrendChart points={dailyTotals} range={range} onRangeChange={setRange} unit="L" yLabel="Litres sold" />
+        </div>
+
+        <div className="form" style={{ padding: "12px 18px", gap: 12 }}>
+          <p className="ds-note">
+            A farm can have several buyers collecting on the same day — each save here adds a new collection rather than replacing the day&apos;s total.
+          </p>
+
+          <label className="field">
+            <span className="field-label">Litres sold</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input className="field-input" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
+              <input className="field-input" type="number" inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} placeholder="Litres" style={{ width: 90 }} />
             </div>
+          </label>
+
+          <label className="field">
+            <span className="field-label">Taken by</span>
+            <input className="field-input" value={takenBy} onChange={(e) => setTakenBy(e.target.value)} placeholder="e.g. driver, company or buyer name" />
+          </label>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="save-btn" onClick={handleSave} disabled={saving || litres === ""}>
+              {saving ? "Saving…" : editingId ? "Save changes" : "Save milk sold"}
+            </button>
+            {editingId && <button className="link-btn" onClick={resetForm}>Cancel edit</button>}
           </div>
-        ))}
+        </div>
+
+        <div className="field" style={{ padding: "0 18px 18px" }}>
+          <span className="field-label">History</span>
+          {entries.length === 0 && <p className="ds-note">No milk sold logged yet for {farm.name}.</p>}
+          {entries.map((e) => (
+            <div key={e.id} className={`settings-row${editingId === e.id ? " active" : ""}`}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button className="link-btn" style={{ textAlign: "left" }} onClick={() => startEdit(e)}>
+                  {e.date.slice(0, 10)} — {e.litres}L{e.takenBy ? ` — ${e.takenBy}` : ""}
+                </button>
+                <button className="link-btn" onClick={() => handleDelete(e.id)} aria-label="Delete milk sale">
+                  <Trash2 size={14} strokeWidth={1.75} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

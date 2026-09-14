@@ -47,6 +47,7 @@ export function withinRange(dateStr: string, rangeId: string) {
   if (rangeId === "all") return true;
   if (rangeId === "ytd") return d.getFullYear() === today.getFullYear();
   const cutoff = new Date(today);
+  if (rangeId === "14d") cutoff.setDate(cutoff.getDate() - 14);
   if (rangeId === "1m") cutoff.setMonth(cutoff.getMonth() - 1);
   if (rangeId === "3m") cutoff.setMonth(cutoff.getMonth() - 3);
   if (rangeId === "6m") cutoff.setMonth(cutoff.getMonth() - 6);
