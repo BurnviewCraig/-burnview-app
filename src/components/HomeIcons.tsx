@@ -49,18 +49,22 @@ export function CattleColorIcon({ size = 30 }: IconProps) {
   );
 }
 
-export function FeedColorIcon({ size = 30 }: IconProps) {
+export function GrassColorIcon({ size = 30 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M9.3 4C7.6 6 6.5 8.7 6.5 12.5c0 4.6 2.4 7.7 5.5 7.7s5.5-3.1 5.5-7.7C17.5 8.7 16.4 6 14.7 4z" fill="#E9C13A" stroke="#C9A227" strokeWidth="0.6" />
-      <g stroke="#C9A227" strokeWidth="0.6">
-        <path d="M8.6 6.5v12" />
-        <path d="M10.8 4.8v14.8" />
-        <path d="M13.2 4.8v14.8" />
-        <path d="M15.4 6.5v12" />
+      <path d="M1 14 Q6 10.5 12 13 T23 12 V21 H1 Z" fill="#3F7A3F" />
+      <path d="M1 17 Q7 14.2 12 16.5 T23 16 V21 H1 Z" fill="#2E5C2A" />
+      <g strokeLinecap="round" strokeWidth="1.3">
+        <path d="M4 21 L3.3 15.5" stroke="#6FB86A" />
+        <path d="M5.5 21 L5.5 13.5" stroke="#8DCB6E" />
+        <path d="M7 21 L8 15" stroke="#5DA05B" />
+        <path d="M10 21 L9.3 14.5" stroke="#8DCB6E" />
+        <path d="M12 21 L12.5 13" stroke="#6FB86A" />
+        <path d="M14.5 21 L14 15" stroke="#8DCB6E" />
+        <path d="M16.5 21 L17.3 14" stroke="#5DA05B" />
+        <path d="M19 21 L18.6 15.5" stroke="#8DCB6E" />
+        <path d="M20.8 21 L21.3 13.8" stroke="#6FB86A" />
       </g>
-      <path d="M9.3 4C7 2.2 4.2 2.7 3 4.5c2 .2 4 .1 5.6 1.3z" fill="#4C8C4A" />
-      <path d="M14.7 4c2.3-1.8 5.1-1.3 6.3.5-2 .2-4 .1-5.6 1.3z" fill="#5DA05B" />
     </svg>
   );
 }

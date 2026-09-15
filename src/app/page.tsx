@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale } from "@/lib/calendarFormat";
-import { CalendarColorIcon, FarmColorIcon, CattleColorIcon, FeedColorIcon, StocksColorIcon, DieselColorIcon } from "@/components/HomeIcons";
+import { CalendarColorIcon, FarmColorIcon, CattleColorIcon, GrassColorIcon, StocksColorIcon, DieselColorIcon } from "@/components/HomeIcons";
 
 const WIDGET_DAYS = 4; // today + previous 3 — fits comfortably in the card's width
 
@@ -90,7 +90,7 @@ export default function HomePage() {
           <span className="hc-sub">Herds &amp; movements</span>
         </Link>
         <Link className="home-card" href="/food">
-          <FeedColorIcon size={30} />
+          <GrassColorIcon size={30} />
           <span className="hc-title">Grass</span>
           <span className="hc-sub">Grazing &amp; the wedge</span>
         </Link>
