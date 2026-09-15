@@ -113,11 +113,13 @@ export type SeedVariety = {
 export type CattleGroup = {
   id: string;
   farmId: string;
+  farmName?: string;
   name: string;
   currentCount: number | null;
   currentCountDate: string | null;
   currentMilkPerCow: number | null;
   currentMilkDate: string | null;
+  previousMilkPerCow: number | null;
 };
 
 export type CattleCountEntry = {

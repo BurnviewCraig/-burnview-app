@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     orderBy: [{ farmId: "asc" }, { sortOrder: "asc" }],
     include: {
       counts: { orderBy: { date: "desc" }, take: 1 },
-      milkEntries: { orderBy: { date: "desc" }, take: 1 },
+      milkEntries: { orderBy: { date: "desc" }, take: 2 },
     },
   });
 
@@ -25,6 +25,7 @@ export async function GET(req: Request) {
       currentCountDate: g.counts[0]?.date.toISOString().slice(0, 10) ?? null,
       currentMilkPerCow: g.milkEntries[0]?.litresPerCow ?? null,
       currentMilkDate: g.milkEntries[0]?.date.toISOString().slice(0, 10) ?? null,
+      previousMilkPerCow: g.milkEntries[1]?.litresPerCow ?? null,
     })),
   });
 }

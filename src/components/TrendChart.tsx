@@ -15,12 +15,14 @@ export function TrendChart({
   onRangeChange,
   unit,
   yLabel,
+  height = 160,
 }: {
   points: TrendPoint[];
   range: ChartRange;
   onRangeChange: (r: ChartRange) => void;
   unit: string;
   yLabel: string;
+  height?: number;
 }) {
   const filtered = points.filter((p) => withinRange(p.date, range)).sort((a, b) => a.date.localeCompare(b.date));
   const tickInterval = Math.max(0, Math.ceil(filtered.length / 8) - 1);
@@ -37,7 +39,7 @@ export function TrendChart({
       {filtered.length === 0 ? (
         <p className="ds-note">No data in this range yet.</p>
       ) : (
-        <div style={{ width: "100%", height: 160 }}>
+        <div style={{ width: "100%", height }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={filtered} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.paperDeep} />
