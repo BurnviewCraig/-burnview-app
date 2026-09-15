@@ -5,7 +5,7 @@ import { Header } from "@/components/Header";
 export default function FoodPage() {
   return (
     <div className="screen">
-      <Header title="Feed" backHref="/" />
+      <Header title="Grass" backHref="/" />
       <div className="menu-list">
         <Link className="menu-row" href="/food/grazing-allocation">
           <CalendarRange size={18} strokeWidth={1.75} />

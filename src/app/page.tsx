@@ -91,8 +91,8 @@ export default function HomePage() {
         </Link>
         <Link className="home-card" href="/food">
           <FeedColorIcon size={30} />
-          <span className="hc-title">Feed</span>
-          <span className="hc-sub">Pastures &amp; feed</span>
+          <span className="hc-title">Grass</span>
+          <span className="hc-sub">Grazing &amp; the wedge</span>
         </Link>
         <Link className="home-card" href="/stocks">
           <StocksColorIcon size={30} />

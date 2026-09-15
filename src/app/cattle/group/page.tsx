@@ -379,7 +379,7 @@ function DayEditSheet({
             <input className="field-input" type="number" inputMode="decimal" value={silage} onChange={(e) => setSilage(e.target.value)} placeholder="kg" />
           </label>
 
-          <p className="field-hint">Grazing location is set from Feed &gt; Grazing allocation, not here.</p>
+          <p className="field-hint">Grazing location is set from Grass &gt; Grazing allocation, not here.</p>
 
           <div className="edit-entry-actions" style={{ marginTop: 14 }}>
             <button className="save-btn" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
