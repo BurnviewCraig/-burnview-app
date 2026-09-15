@@ -136,6 +136,16 @@ export type MilkProductionEntry = {
   litresPerCow: number;
 };
 
+export type GroupFeedEntry = {
+  id: string;
+  groupId: string;
+  date: string;
+  dairyMealKg: number | null;
+  otherConcentrateName: string | null;
+  otherConcentrateKg: number | null;
+  silageKg: number | null;
+};
+
 export type MilkSaleEntry = {
   id: string;
   farmId: string;

@@ -24,6 +24,7 @@ model User {
   milkSaleEntries MilkSaleEntry[]
   rainfallEntries RainfallEntry[]
   dieselLogEntries DieselLogEntry[]
+  groupFeedEntries GroupFeedEntry[]
 }
 
 model Farm {
@@ -77,6 +78,7 @@ model CattleGroup {
   allocations GrazingAllocation[]
   counts      CattleCountEntry[]
   milkEntries MilkProductionEntry[]
+  feedEntries GroupFeedEntry[]
 
   @@unique([farmId, name])
 }
@@ -470,4 +472,26 @@ model DieselLogEntry {
   createdBy User?       @relation(fields: [createdById], references: [id])
 
   @@unique([assetId, date])
+}
+
+// What one milking group was fed on one day. otherConcentrateName is
+// free-text for now (no fixed list of concentrate products yet) — one
+// upsert-per-day row, same "logging again corrects that day" pattern as
+// headcount/milk.
+model GroupFeedEntry {
+  id                   String   @id @default(cuid())
+  groupId              String
+  date                 DateTime @db.Date
+  dairyMealKg          Float?
+  otherConcentrateName String?
+  otherConcentrateKg   Float?
+  silageKg             Float?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  group     CattleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id])
+
+  @@unique([groupId, date])
 }
