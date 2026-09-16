@@ -1,41 +1,68 @@
-// Nightly AFI import — reads the two CSVs AFI drops into the shared OneDrive
-// folder and writes per-group averages / milk-sold rows into the app's DB.
+// Nightly AFI import — reads the CSVs AFI drops into shared OneDrive folders
+// and writes per-group averages / milk-sold rows into the app's DB.
 //
 // Run with:  node --env-file=.env scripts/afi-import.mjs
 // (the --env-file flag loads DATABASE_URL the same way Next.js does, since
 // this runs standalone outside the Next.js server)
 //
 // Intended to run nightly via Windows Task Scheduler shortly after AFI's
-// 8pm export (e.g. 8:30pm). Safe to re-run: group readings are upserted per
-// (group, date), and milk-sold rows are deduped by AFI's own invoice number
-// (sourceRef), so a shipment entered into AFI late and re-exported the next
-// night won't be double-counted.
+// 8pm export (currently scheduled 9pm). Safe to re-run: group readings are
+// upserted per (group, date), and milk-sold rows are deduped by AFI's own
+// invoice number (sourceRef), so a shipment entered into AFI late and
+// re-exported the next night won't be double-counted.
+//
+// Two separate AFI parlor systems feed this: Burnview/Everfair share one
+// (synced via the Burnview Dairy OneDrive account into "Craig Export"),
+// Stockton runs its own separate system (synced into this PC's personal
+// OneDrive as "Report Exports"). Each gets its own group/tank mapping below
+// since group and tank numbers are local to each system, not global.
 
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { PrismaClient } from "@prisma/client";
 
-const EXPORT_DIR =
-  process.env.AFI_EXPORT_DIR ||
-  "C:\\Users\\craig\\OneDrive - Burnview\\Burnview Dairy's files - Craig Export";
-
-// AFI group number -> which farm + which CattleGroup.name it is. 70/71 are
-// the Burnview/Everfair hospital pens — deliberately not one of the four
-// tracked groups, so they're just left out.
-const GROUP_MAP = {
-  1: { farmSlug: "burnview", groupName: "A" },
-  2: { farmSlug: "burnview", groupName: "B" },
-  3: { farmSlug: "burnview", groupName: "C" },
-  4: { farmSlug: "everfair", groupName: "EA" },
-};
-
-// AFI tank number -> which farm's milk it is.
-const TANK_FARM = { 1: "burnview", 2: "everfair" };
+const SOURCES = [
+  {
+    name: "Burnview/Everfair",
+    exportDir:
+      process.env.AFI_EXPORT_DIR ||
+      "C:\\Users\\craig\\OneDrive - Burnview\\Burnview Dairy's files - Craig Export",
+    // AFI group number -> which farm + which CattleGroup.name it is. 70/71
+    // are the Burnview/Everfair hospital pens — deliberately not one of the
+    // four tracked groups, so they're just left out.
+    groupMap: {
+      1: { farmSlug: "burnview", groupName: "A" },
+      2: { farmSlug: "burnview", groupName: "B" },
+      3: { farmSlug: "burnview", groupName: "C" },
+      4: { farmSlug: "everfair", groupName: "EA" },
+    },
+    tankFarm: { 1: "burnview", 2: "everfair" },
+    // No prefix — matches the sourceRef format already used for every
+    // Burnview/Everfair shipment imported so far, so re-running doesn't
+    // create duplicates of existing rows.
+    sourceTag: null,
+  },
+  {
+    name: "Stockton",
+    exportDir: process.env.AFI_STOCKTON_EXPORT_DIR || "C:\\Users\\craig\\OneDrive\\Report Exports",
+    // Group 70 is Stockton's hospital pen, left out same as Burnview's.
+    // This system's export has no "After calving" column, so DIM just
+    // won't be populated for Stockton — that's fine, it stays null.
+    groupMap: {
+      1: { farmSlug: "stockton", groupName: "SA" },
+      2: { farmSlug: "stockton", groupName: "SB" },
+    },
+    tankFarm: { 1: "stockton" },
+    // Prefixed so an invoice number from this separate AFI system can never
+    // collide with one from the Burnview/Everfair system.
+    sourceTag: "stockton",
+  },
+];
 
 const prisma = new PrismaClient();
 
-function latestFile(prefix) {
-  const files = readdirSync(EXPORT_DIR).filter((f) => f.startsWith(prefix) && f.endsWith(".csv"));
+function latestFile(exportDir, prefix) {
+  const files = readdirSync(exportDir).filter((f) => f.startsWith(prefix) && f.endsWith(".csv"));
   if (!files.length) return null;
   // "Prefix - DD-MM-YYYY HH-MM.csv" — sort by that timestamp, not just mtime,
   // so this is correct even if OneDrive re-touches file times on sync.
@@ -56,25 +83,28 @@ function ddmmyyyyToIso(d) {
   return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
 }
 
-async function importCraigReport() {
-  const found = latestFile("Craig Report");
+async function importCraigReport(source) {
+  const { exportDir, groupMap } = source;
+  const found = latestFile(exportDir, "Craig Report");
   if (!found) { console.log("No Craig Report file found."); return; }
   const date = `${found.ts.getFullYear()}-${String(found.ts.getMonth() + 1).padStart(2, "0")}-${String(found.ts.getDate()).padStart(2, "0")}`;
   console.log(`\nCraig Report: ${found.file} -> date ${date}`);
 
-  const text = readFileSync(join(EXPORT_DIR, found.file), "utf-8");
+  const text = readFileSync(join(exportDir, found.file), "utf-8");
   const lines = text.split(/\r?\n/).slice(3).filter((l) => l.trim());
 
   const byGroup = {}; // grp -> { count, yieldSum, yieldN, weightSum, weightN, feedSum, feedN, dimSum, dimN }
   for (const line of lines) {
     const cols = line.split(",");
     const grp = Number(cols[2]);
-    if (!GROUP_MAP[grp]) continue; // skip 70/71 and anything unexpected
+    if (!groupMap[grp]) continue; // skip hospital pens and anything unexpected
     const alloc = cols[3] === "--" || cols[3] === "" ? null : Number(cols[3]);
     const yield_ = cols[4] === "--" || cols[4] === "" ? null : Number(cols[4]);
     const weight = cols[5] === "--" || cols[5] === "" ? null : Number(cols[5]);
     // "After calving" — AFI's days-since-calving column, i.e. days in milk.
-    const dim = cols[6] === "--" || cols[6] === "" ? null : Number(cols[6]);
+    // Not every AFI system's export includes it (Stockton's doesn't), in
+    // which case cols[6] is just undefined and dim stays null throughout.
+    const dim = cols[6] === "--" || cols[6] === "" || cols[6] == null ? null : Number(cols[6]);
 
     const g = (byGroup[grp] ??= { count: 0, yieldSum: 0, yieldN: 0, weightSum: 0, weightN: 0, feedSum: 0, feedN: 0, dimSum: 0, dimN: 0 });
     g.count++;
@@ -86,7 +116,7 @@ async function importCraigReport() {
 
   for (const [grpStr, stats] of Object.entries(byGroup)) {
     const grp = Number(grpStr);
-    const { farmSlug, groupName } = GROUP_MAP[grp];
+    const { farmSlug, groupName } = groupMap[grp];
     const group = await prisma.cattleGroup.findFirst({ where: { name: groupName, farm: { slug: farmSlug } } });
     if (!group) { console.warn(`  ! No CattleGroup found for ${farmSlug} ${groupName} — skipping group ${grp}`); continue; }
 
@@ -133,16 +163,17 @@ async function importCraigReport() {
   }
 }
 
-async function importMilkShipments() {
-  const found = latestFile("Primary Milk Shipment Report");
+async function importMilkShipments(source) {
+  const { exportDir, tankFarm, sourceTag } = source;
+  const found = latestFile(exportDir, "Primary Milk Shipment Report");
   if (!found) { console.log("No Primary Milk Shipment Report file found."); return; }
   console.log(`\nPrimary Milk Shipment Report: ${found.file}`);
 
-  const text = readFileSync(join(EXPORT_DIR, found.file), "utf-8");
+  const text = readFileSync(join(exportDir, found.file), "utf-8");
   const lines = text.split(/\r?\n/).slice(2).filter((l) => l.trim());
 
   const farms = {};
-  for (const slug of Object.values(TANK_FARM)) {
+  for (const slug of Object.values(tankFarm)) {
     farms[slug] = await prisma.farm.findUnique({ where: { slug } });
   }
 
@@ -156,14 +187,15 @@ async function importMilkShipments() {
     const tank = Number(cols[4]);
     const quantity = Number(cols[5]);
     const creamery = cols[6];
-    const farmSlug = TANK_FARM[tank];
+    const farmSlug = tankFarm[tank];
     if (!farmSlug || !farms[farmSlug]) { console.warn(`  ! Unknown tank ${tank} on invoice ${invoice} — skipping`); skipped++; continue; }
     if (!quantity || Number.isNaN(quantity)) { skipped++; continue; }
 
+    const sourceRef = sourceTag ? `${sourceTag}-${invoice}` : invoice;
     await prisma.milkSaleEntry.upsert({
-      where: { sourceRef: invoice },
+      where: { sourceRef },
       update: { farmId: farms[farmSlug].id, date: new Date(date), litres: quantity, takenBy: creamery || null },
-      create: { farmId: farms[farmSlug].id, date: new Date(date), litres: quantity, takenBy: creamery || null, sourceRef: invoice },
+      create: { farmId: farms[farmSlug].id, date: new Date(date), litres: quantity, takenBy: creamery || null, sourceRef },
     });
     imported++;
   }
@@ -171,9 +203,11 @@ async function importMilkShipments() {
 }
 
 async function main() {
-  console.log(`AFI import starting — folder: ${EXPORT_DIR}`);
-  await importCraigReport();
-  await importMilkShipments();
+  for (const source of SOURCES) {
+    console.log(`\n=== ${source.name} — folder: ${source.exportDir} ===`);
+    await importCraigReport(source);
+    await importMilkShipments(source);
+  }
   console.log("\nDone.");
 }
 
