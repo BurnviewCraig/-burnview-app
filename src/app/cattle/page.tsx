@@ -53,7 +53,7 @@ function SummaryPanel({ farmId, label }: { farmId: string | null; label: string 
           <button key={m.id} className={`range-chip${metric === m.id ? " on" : ""}`} onClick={() => setMetric(m.id)}>{m.label}</button>
         ))}
       </div>
-      <TrendChart points={points} range={range} onRangeChange={setRange} unit={activeMetric.unit} yLabel={activeMetric.label} />
+      <TrendChart points={points} range={range} onRangeChange={setRange} unit={activeMetric.unit} yLabel={activeMetric.label} title={`${label} — ${activeMetric.label}`} />
     </div>
   );
 }
@@ -128,6 +128,7 @@ export default function CattlePage() {
                       </span>
                     )}
                     <span className="cgb-count">{g.currentCount != null ? `${g.currentCount} head` : "No count set"}</span>
+                    <span className="cgb-count">{g.currentDaysInMilk != null ? `${g.currentDaysInMilk} DIM` : "No DIM logged"}</span>
                   </Link>
                 );
               })}

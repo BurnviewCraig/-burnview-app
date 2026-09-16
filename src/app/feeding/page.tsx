@@ -5,13 +5,16 @@ import { Trash2, Pencil } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
-import type { Farm, CattleGroup, AdditionalConcentrate } from "@/lib/types";
+import type { Farm, CattleGroup, AdditionalConcentrate, GroupFeedEntry } from "@/lib/types";
 
 function GroupConcentrates({ group }: { group: CattleGroup }) {
   const { data, refetch } = useApi<{ concentrates: AdditionalConcentrate[] }>(
     `/api/additional-concentrates?groupId=${group.id}`
   );
   const concentrates = data?.concentrates ?? [];
+
+  const { data: feedData } = useApi<{ entries: GroupFeedEntry[] }>(`/api/group-feed?groupId=${group.id}`);
+  const latestFeed = feedData?.entries.find((e) => e.dairyMealKg != null) ?? null;
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -67,6 +70,10 @@ function GroupConcentrates({ group }: { group: CattleGroup }) {
   return (
     <div className="settings-row">
       <div className="settings-row-title">Group {group.name}</div>
+      <p className="ds-note" style={{ margin: "2px 0 6px" }}>
+        Dairy meal (AFI): {latestFeed?.dairyMealKg != null ? `${latestFeed.dairyMealKg}kg/cow` : "not logged yet"}
+        {latestFeed && ` — ${latestFeed.date.slice(0, 10)}`}
+      </p>
       {concentrates.length === 0 && !showForm && (
         <p className="ds-note" style={{ margin: "4px 0" }}>Nothing added yet.</p>
       )}

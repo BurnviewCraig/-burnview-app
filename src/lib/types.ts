@@ -120,6 +120,7 @@ export type CattleGroup = {
   currentMilkPerCow: number | null;
   currentMilkDate: string | null;
   previousMilkPerCow: number | null;
+  currentDaysInMilk: number | null;
 };
 
 export type CattleCountEntry = {

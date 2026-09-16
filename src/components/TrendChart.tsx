@@ -16,6 +16,7 @@ export function TrendChart({
   unit,
   yLabel,
   height = 160,
+  title,
 }: {
   points: TrendPoint[];
   range: ChartRange;
@@ -23,12 +24,14 @@ export function TrendChart({
   unit: string;
   yLabel: string;
   height?: number;
+  title?: string;
 }) {
   const filtered = points.filter((p) => withinRange(p.date, range)).sort((a, b) => a.date.localeCompare(b.date));
   const tickInterval = Math.max(0, Math.ceil(filtered.length / 8) - 1);
 
   return (
-    <div className="field">
+    <div className="chart-card">
+      <h3 className="chart-card-title">{title ?? yLabel}</h3>
       <div className="chip-wrap" style={{ marginBottom: 8 }}>
         {MILK_CHART_RANGES.map((r) => (
           <button key={r.id} className={`range-chip${range === r.id ? " on" : ""}`} onClick={() => onRangeChange(r.id)}>
