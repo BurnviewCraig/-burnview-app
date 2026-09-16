@@ -136,6 +136,13 @@ export type MilkProductionEntry = {
   litresPerCow: number;
 };
 
+export type GroupWeightEntry = {
+  id: string;
+  groupId: string;
+  date: string;
+  avgWeightKg: number;
+};
+
 export type GroupFeedEntry = {
   id: string;
   groupId: string;

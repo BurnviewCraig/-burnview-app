@@ -25,6 +25,7 @@ model User {
   rainfallEntries RainfallEntry[]
   dieselLogEntries DieselLogEntry[]
   groupFeedEntries GroupFeedEntry[]
+  groupWeightEntries GroupWeightEntry[]
 }
 
 model Farm {
@@ -79,6 +80,7 @@ model CattleGroup {
   counts      CattleCountEntry[]
   milkEntries MilkProductionEntry[]
   feedEntries GroupFeedEntry[]
+  weightEntries GroupWeightEntry[]
 
   @@unique([farmId, name])
 }
@@ -145,17 +147,37 @@ model MilkProductionEntry {
   @@unique([groupId, date])
 }
 
+// One average-weight reading per group per day — same "upsert corrects
+// that day" pattern as milk/headcount.
+model GroupWeightEntry {
+  id          String   @id @default(cuid())
+  groupId     String
+  date        DateTime @db.Date
+  avgWeightKg Float
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  group     CattleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id])
+
+  @@unique([groupId, date])
+}
+
 // One collection of milk sold off the farm — a farm can have several of
 // these on the same day (different buyers each taking their own load), so
 // there's no unique constraint on farmId+date here, unlike the other daily
 // entries. Deliberately separate from MilkProductionEntry: sold litres
 // don't have to reconcile exactly with what the groups produced that day.
 model MilkSaleEntry {
-  id      String   @id @default(cuid())
-  farmId  String
-  date    DateTime @db.Date
-  litres  Float
-  takenBy String? // who collected it, e.g. driver/company/buyer name
+  id        String   @id @default(cuid())
+  farmId    String
+  date      DateTime @db.Date
+  litres    Float
+  takenBy   String? // who collected it, e.g. driver/company/buyer name
+  sourceRef String?  @unique // AFI invoice number, for imported rows — a shipment
+  // entered into AFI a day late still carries its correct date, so it can
+  // land in more than one nightly export; this stops it being imported twice.
 
   createdById String?
   createdAt   DateTime @default(now())
