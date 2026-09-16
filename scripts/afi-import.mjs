@@ -65,7 +65,7 @@ async function importCraigReport() {
   const text = readFileSync(join(EXPORT_DIR, found.file), "utf-8");
   const lines = text.split(/\r?\n/).slice(3).filter((l) => l.trim());
 
-  const byGroup = {}; // grp -> { count, yieldSum, yieldN, weightSum, weightN, feedSum, feedN }
+  const byGroup = {}; // grp -> { count, yieldSum, yieldN, weightSum, weightN, feedSum, feedN, dimSum, dimN }
   for (const line of lines) {
     const cols = line.split(",");
     const grp = Number(cols[2]);
@@ -73,12 +73,15 @@ async function importCraigReport() {
     const alloc = cols[3] === "--" || cols[3] === "" ? null : Number(cols[3]);
     const yield_ = cols[4] === "--" || cols[4] === "" ? null : Number(cols[4]);
     const weight = cols[5] === "--" || cols[5] === "" ? null : Number(cols[5]);
+    // "After calving" — AFI's days-since-calving column, i.e. days in milk.
+    const dim = cols[6] === "--" || cols[6] === "" ? null : Number(cols[6]);
 
-    const g = (byGroup[grp] ??= { count: 0, yieldSum: 0, yieldN: 0, weightSum: 0, weightN: 0, feedSum: 0, feedN: 0 });
+    const g = (byGroup[grp] ??= { count: 0, yieldSum: 0, yieldN: 0, weightSum: 0, weightN: 0, feedSum: 0, feedN: 0, dimSum: 0, dimN: 0 });
     g.count++;
     if (yield_ != null && !Number.isNaN(yield_)) { g.yieldSum += yield_; g.yieldN++; }
     if (weight != null && !Number.isNaN(weight)) { g.weightSum += weight; g.weightN++; }
     if (alloc != null && !Number.isNaN(alloc)) { g.feedSum += alloc; g.feedN++; }
+    if (dim != null && !Number.isNaN(dim)) { g.dimSum += dim; g.dimN++; }
   }
 
   for (const [grpStr, stats] of Object.entries(byGroup)) {
@@ -90,8 +93,9 @@ async function importCraigReport() {
     const avgYield = stats.yieldN ? Math.round((stats.yieldSum / stats.yieldN) * 10) / 10 : null;
     const avgWeight = stats.weightN ? Math.round((stats.weightSum / stats.weightN) * 10) / 10 : null;
     const avgFeed = stats.feedN ? Math.round((stats.feedSum / stats.feedN) * 10) / 10 : null;
+    const avgDim = stats.dimN ? Math.round((stats.dimSum / stats.dimN) * 10) / 10 : null;
 
-    console.log(`  ${farmSlug} ${groupName}: ${stats.count} cows, yield ${avgYield ?? "—"} L/cow, weight ${avgWeight ?? "—"} kg, dairy meal ${avgFeed ?? "—"} kg`);
+    console.log(`  ${farmSlug} ${groupName}: ${stats.count} cows, yield ${avgYield ?? "—"} L/cow, weight ${avgWeight ?? "—"} kg, dairy meal ${avgFeed ?? "—"} kg, DIM ${avgDim ?? "—"} days`);
 
     await prisma.cattleCountEntry.upsert({
       where: { groupId_date: { groupId: group.id, date: new Date(date) } },
@@ -117,6 +121,13 @@ async function importCraigReport() {
         where: { groupId_date: { groupId: group.id, date: new Date(date) } },
         update: { dairyMealKg: avgFeed },
         create: { groupId: group.id, date: new Date(date), dairyMealKg: avgFeed },
+      });
+    }
+    if (avgDim != null) {
+      await prisma.groupDimEntry.upsert({
+        where: { groupId_date: { groupId: group.id, date: new Date(date) } },
+        update: { avgDaysInMilk: avgDim },
+        create: { groupId: group.id, date: new Date(date), avgDaysInMilk: avgDim },
       });
     }
   }

@@ -143,6 +143,13 @@ export type GroupWeightEntry = {
   avgWeightKg: number;
 };
 
+export type GroupDimEntry = {
+  id: string;
+  groupId: string;
+  date: string;
+  avgDaysInMilk: number;
+};
+
 export type GroupFeedEntry = {
   id: string;
   groupId: string;
@@ -168,6 +175,7 @@ export type CattleSummary = {
     avgWeightKg: number | null;
     dairyMealKg: number | null;
     gramsPerLitre: number | null;
+    avgDaysInMilk: number | null;
   } | null;
   trend: {
     litres: { date: string; value: number }[];
@@ -175,6 +183,7 @@ export type CattleSummary = {
     dairyMeal: { date: string; value: number }[];
     gramsPerLitre: { date: string; value: number }[];
     count: { date: string; value: number }[];
+    daysInMilk: { date: string; value: number }[];
   };
 };
 

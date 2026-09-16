@@ -11,7 +11,7 @@ import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { addDays } from "@/lib/calendarFormat";
 import { gramsPerLitre } from "@/lib/feedCalc";
-import type { CattleGroup, CattleCountEntry, GrazingAllocation, MilkProductionEntry, GroupFeedEntry, GroupWeightEntry } from "@/lib/types";
+import type { CattleGroup, CattleCountEntry, GrazingAllocation, MilkProductionEntry, GroupFeedEntry, GroupWeightEntry, GroupDimEntry } from "@/lib/types";
 
 function round1(n: number) {
   return Math.round(n * 10) / 10;
@@ -30,6 +30,7 @@ type GridRow = {
   milk: number | null;
   rollingAvg: number | null;
   weightKg: number | null;
+  daysInMilk: number | null;
   grazing: string;
   dairyMealKg: number | null;
   gramsPerLitre: number | null;
@@ -49,6 +50,7 @@ function GroupPageContent() {
 
   const [milkRange, setMilkRange] = useState<ChartRange>("1m");
   const [weightRange, setWeightRange] = useState<ChartRange>("1m");
+  const [dimRange, setDimRange] = useState<ChartRange>("1m");
   const [showFullHistory, setShowFullHistory] = useState(false);
   const [histFrom, setHistFrom] = useState(addDays(todayStr(), -30));
   const [histTo, setHistTo] = useState(todayStr());
@@ -74,9 +76,14 @@ function GroupPageContent() {
     groupId ? `/api/group-weights?groupId=${groupId}` : null
   );
   const weightEntries = weightData?.entries ?? [];
+  const { data: dimData, refetch: refetchDim } = useApi<{ entries: GroupDimEntry[] }>(
+    groupId ? `/api/group-dim?groupId=${groupId}` : null
+  );
+  const dimEntries = dimData?.entries ?? [];
 
   const milkPoints = useMemo(() => milkEntries.map((m) => ({ date: m.date.slice(0, 10), value: m.litresPerCow })), [milkEntries]);
   const weightPoints = useMemo(() => weightEntries.map((w) => ({ date: w.date.slice(0, 10), value: w.avgWeightKg })), [weightEntries]);
+  const dimPoints = useMemo(() => dimEntries.map((d) => ({ date: d.date.slice(0, 10), value: d.avgDaysInMilk })), [dimEntries]);
 
   const milkComparison = useMemo(() => {
     const avgForMonth = (key: string) => {
@@ -94,6 +101,7 @@ function GroupPageContent() {
   const milkByDate = useMemo(() => new Map(milkEntries.map((m) => [m.date.slice(0, 10), m])), [milkEntries]);
   const feedByDate = useMemo(() => new Map(feedEntries.map((f) => [f.date.slice(0, 10), f])), [feedEntries]);
   const weightByDate = useMemo(() => new Map(weightEntries.map((w) => [w.date.slice(0, 10), w])), [weightEntries]);
+  const dimByDate = useMemo(() => new Map(dimEntries.map((d) => [d.date.slice(0, 10), d])), [dimEntries]);
   const allocByDate = useMemo(() => {
     const map = new Map<string, GrazingAllocation[]>();
     allocations.forEach((a) => {
@@ -138,12 +146,14 @@ function GroupPageContent() {
       const m = milkByDate.get(d);
       const f = feedByDate.get(d);
       const w = weightByDate.get(d);
+      const dim = dimByDate.get(d);
       rows.push({
         date: d,
         count: c?.count ?? null,
         milk: m?.litresPerCow ?? null,
         rollingAvg: rollingAvgFor(d),
         weightKg: w?.avgWeightKg ?? null,
+        daysInMilk: dim?.avgDaysInMilk ?? null,
         grazing: grazingLabel(d),
         dairyMealKg: f?.dairyMealKg ?? null,
         gramsPerLitre: gramsPerLitre(f?.dairyMealKg, m?.litresPerCow),
@@ -158,9 +168,9 @@ function GroupPageContent() {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const last10 = useMemo(() => buildRows(addDays(todayStr(), -9), todayStr()), [countByDate, milkByDate, feedByDate, weightByDate, allocByDate]);
+  const last10 = useMemo(() => buildRows(addDays(todayStr(), -9), todayStr()), [countByDate, milkByDate, feedByDate, weightByDate, dimByDate, allocByDate]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const fullHistoryRows = useMemo(() => (showFullHistory ? buildRows(histFrom, histTo) : []), [showFullHistory, histFrom, histTo, countByDate, milkByDate, feedByDate, weightByDate, allocByDate]);
+  const fullHistoryRows = useMemo(() => (showFullHistory ? buildRows(histFrom, histTo) : []), [showFullHistory, histFrom, histTo, countByDate, milkByDate, feedByDate, weightByDate, dimByDate, allocByDate]);
 
   const editRow = useMemo(() => {
     if (!editDate) return null;
@@ -168,16 +178,18 @@ function GroupPageContent() {
     const m = milkByDate.get(editDate);
     const f = feedByDate.get(editDate);
     const w = weightByDate.get(editDate);
+    const dim = dimByDate.get(editDate);
     return {
       count: c?.count ?? null,
       milk: m?.litresPerCow ?? null,
+      daysInMilk: dim?.avgDaysInMilk ?? null,
       weightKg: w?.avgWeightKg ?? null,
       dairyMealKg: f?.dairyMealKg ?? null,
       otherName: f?.otherConcentrateName ?? null,
       otherKg: f?.otherConcentrateKg ?? null,
       silageKg: f?.silageKg ?? null,
     };
-  }, [editDate, countByDate, milkByDate, feedByDate, weightByDate]);
+  }, [editDate, countByDate, milkByDate, feedByDate, weightByDate, dimByDate]);
 
   if (loading) return <div className="screen"><Header title="Group" backHref="/cattle" /><Spinner /></div>;
   if (!group) return <div className="screen"><Header title="Group" backHref="/cattle" /><div className="empty">Group not found.</div></div>;
@@ -192,6 +204,7 @@ function GroupPageContent() {
             <th>Yield</th>
             <th>10d avg</th>
             <th>Weight</th>
+            <th>DIM</th>
             <th>Grazing</th>
             <th>Dairy meal</th>
             <th>g/L</th>
@@ -207,6 +220,7 @@ function GroupPageContent() {
               <td>{r.milk ?? "—"}{r.milk != null ? " L/cow" : ""}</td>
               <td>{r.rollingAvg ?? "—"}{r.rollingAvg != null ? " L/cow" : ""}</td>
               <td>{r.weightKg ?? "—"}{r.weightKg != null ? "kg" : ""}</td>
+              <td>{r.daysInMilk ?? "—"}{r.daysInMilk != null ? "d" : ""}</td>
               <td>{r.grazing}</td>
               <td>{r.dairyMealKg ?? "—"}{r.dairyMealKg != null ? "kg" : ""}</td>
               <td>{r.gramsPerLitre ?? "—"}</td>
@@ -230,6 +244,10 @@ function GroupPageContent() {
 
         <div style={{ padding: "12px 18px 0" }}>
           <TrendChart points={weightPoints} range={weightRange} onRangeChange={setWeightRange} unit="kg" yLabel="Average weight" height={260} />
+        </div>
+
+        <div style={{ padding: "12px 18px 0" }}>
+          <TrendChart points={dimPoints} range={dimRange} onRangeChange={setDimRange} unit=" days" yLabel="Days in milk" height={260} />
         </div>
 
         <p className="field-hint" style={{ padding: "8px 18px 0" }}>Tap a row to add or correct that day&apos;s numbers.</p>
@@ -289,6 +307,7 @@ function GroupPageContent() {
             refetchMilk();
             refetchFeed();
             refetchWeight();
+            refetchDim();
           }}
         />
       )}
@@ -309,6 +328,7 @@ function DayEditSheet({
     count: number | null;
     milk: number | null;
     weightKg: number | null;
+    daysInMilk: number | null;
     dairyMealKg: number | null;
     otherName: string | null;
     otherKg: number | null;
@@ -320,6 +340,7 @@ function DayEditSheet({
   const [count, setCount] = useState(initial?.count != null ? String(initial.count) : "");
   const [milk, setMilk] = useState(initial?.milk != null ? String(initial.milk) : "");
   const [weight, setWeight] = useState(initial?.weightKg != null ? String(initial.weightKg) : "");
+  const [dim, setDim] = useState(initial?.daysInMilk != null ? String(initial.daysInMilk) : "");
   const [dairyMeal, setDairyMeal] = useState(initial?.dairyMealKg != null ? String(initial.dairyMealKg) : "");
   const [otherName, setOtherName] = useState(initial?.otherName ?? "");
   const [otherKg, setOtherKg] = useState(initial?.otherKg != null ? String(initial.otherKg) : "");
@@ -348,6 +369,13 @@ function DayEditSheet({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ groupId, date, avgWeightKg: Number(weight) }),
+      }));
+    }
+    if (dim !== "" && Number(dim) >= 0) {
+      requests.push(fetch("/api/group-dim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId, date, avgDaysInMilk: Number(dim) }),
       }));
     }
     if (dairyMeal !== "" || otherName !== "" || otherKg !== "" || silage !== "") {
@@ -397,6 +425,11 @@ function DayEditSheet({
           <label className="field">
             <span className="field-label">Average weight (kg)</span>
             <input className="field-input" type="number" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="kg" />
+          </label>
+
+          <label className="field">
+            <span className="field-label">Average days in milk</span>
+            <input className="field-input" type="number" inputMode="numeric" value={dim} onChange={(e) => setDim(e.target.value)} placeholder="days" />
           </label>
 
           <label className="field">

@@ -16,6 +16,7 @@ const METRICS = [
   { id: "weight", label: "Weight", unit: "kg" },
   { id: "dairyMeal", label: "Dairy meal", unit: "kg" },
   { id: "gramsPerLitre", label: "g/L", unit: "g/L" },
+  { id: "daysInMilk", label: "Days in milk", unit: " days" },
 ] as const;
 type MetricId = (typeof METRICS)[number]["id"];
 
@@ -27,7 +28,11 @@ function SummaryPanel({ farmId, label }: { farmId: string | null; label: string 
   const [metric, setMetric] = useState<MetricId>("litres");
   const [range, setRange] = useState<ChartRange>("1m");
 
-  const trendKey = metric === "dairyMeal" ? "dairyMeal" : metric === "gramsPerLitre" ? "gramsPerLitre" : metric === "weight" ? "weight" : "litres";
+  const trendKey =
+    metric === "dairyMeal" ? "dairyMeal" :
+    metric === "gramsPerLitre" ? "gramsPerLitre" :
+    metric === "weight" ? "weight" :
+    metric === "daysInMilk" ? "daysInMilk" : "litres";
   const points = data?.trend[trendKey] ?? [];
   const activeMetric = METRICS.find((m) => m.id === metric)!;
 
@@ -40,6 +45,7 @@ function SummaryPanel({ farmId, label }: { farmId: string | null; label: string 
         <div><span className="wib-k">Weight</span><span className="wib-v">{current?.avgWeightKg ?? "—"}{current?.avgWeightKg != null ? "kg" : ""}</span></div>
         <div><span className="wib-k">Dairy meal</span><span className="wib-v">{current?.dairyMealKg ?? "—"}{current?.dairyMealKg != null ? "kg" : ""}</span></div>
         <div><span className="wib-k">g / litre</span><span className="wib-v">{current?.gramsPerLitre ?? "—"}</span></div>
+        <div><span className="wib-k">Days in milk</span><span className="wib-v">{current?.avgDaysInMilk ?? "—"}</span></div>
       </div>
 
       <div className="chip-wrap" style={{ marginBottom: 8 }}>

@@ -20,14 +20,15 @@ export async function GET(req: Request) {
   });
   const groupIds = groups.map((g) => g.id);
 
-  const empty = { current: null, trend: { litres: [], weight: [], dairyMeal: [], gramsPerLitre: [], count: [] } };
+  const empty = { current: null, trend: { litres: [], weight: [], dairyMeal: [], gramsPerLitre: [], count: [], daysInMilk: [] } };
   if (groupIds.length === 0) return NextResponse.json(empty);
 
-  const [counts, milk, weights, feed] = await Promise.all([
+  const [counts, milk, weights, feed, dim] = await Promise.all([
     prisma.cattleCountEntry.findMany({ where: { groupId: { in: groupIds } } }),
     prisma.milkProductionEntry.findMany({ where: { groupId: { in: groupIds } } }),
     prisma.groupWeightEntry.findMany({ where: { groupId: { in: groupIds } } }),
     prisma.groupFeedEntry.findMany({ where: { groupId: { in: groupIds }, dairyMealKg: { not: null } } }),
+    prisma.groupDimEntry.findMany({ where: { groupId: { in: groupIds } } }),
   ]);
 
   function byDateGroup<T extends { date: Date; groupId: string }>(rows: T[]) {
@@ -44,12 +45,14 @@ export async function GET(req: Request) {
   const milkByDate = byDateGroup(milk);
   const weightByDate = byDateGroup(weights);
   const feedByDate = byDateGroup(feed);
+  const dimByDate = byDateGroup(dim);
 
   const allDates = new Set<string>([
     ...countsByDate.keys(),
     ...milkByDate.keys(),
     ...weightByDate.keys(),
     ...feedByDate.keys(),
+    ...dimByDate.keys(),
   ]);
 
   const countPoints: Point[] = [];
@@ -57,17 +60,20 @@ export async function GET(req: Request) {
   const weightPoints: Point[] = [];
   const dairyMealPoints: Point[] = [];
   const gplPoints: Point[] = [];
+  const dimPoints: Point[] = [];
 
   for (const date of Array.from(allDates).sort()) {
     const dayCounts = countsByDate.get(date);
     const dayMilk = milkByDate.get(date);
     const dayWeight = weightByDate.get(date);
     const dayFeed = feedByDate.get(date);
+    const dayDim = dimByDate.get(date);
 
     let totalCount = 0;
     let milkWeighted = 0, milkWeight = 0;
     let weightWeighted = 0, weightWeight = 0;
     let feedWeighted = 0, feedWeight = 0;
+    let dimWeighted = 0, dimWeight = 0;
 
     for (const groupId of groupIds) {
       const c = dayCounts?.get(groupId)?.count;
@@ -82,6 +88,9 @@ export async function GET(req: Request) {
 
       const f = dayFeed?.get(groupId)?.dairyMealKg;
       if (f != null) { feedWeighted += f * c; feedWeight += c; }
+
+      const dm = dayDim?.get(groupId)?.avgDaysInMilk;
+      if (dm != null) { dimWeighted += dm * c; dimWeight += c; }
     }
 
     if (totalCount > 0) countPoints.push({ date, value: totalCount });
@@ -92,6 +101,7 @@ export async function GET(req: Request) {
       litresPoints.push({ date, value: avgMilk });
     }
     if (weightWeight > 0) weightPoints.push({ date, value: Math.round((weightWeighted / weightWeight) * 10) / 10 });
+    if (dimWeight > 0) dimPoints.push({ date, value: Math.round((dimWeighted / dimWeight) * 10) / 10 });
 
     let avgFeed: number | null = null;
     if (feedWeight > 0) {
@@ -112,6 +122,7 @@ export async function GET(req: Request) {
       avgWeightKg: last(weightPoints),
       dairyMealKg: last(dairyMealPoints),
       gramsPerLitre: last(gplPoints),
+      avgDaysInMilk: last(dimPoints),
     },
     trend: {
       litres: litresPoints,
@@ -119,6 +130,7 @@ export async function GET(req: Request) {
       dairyMeal: dairyMealPoints,
       gramsPerLitre: gplPoints,
       count: countPoints,
+      daysInMilk: dimPoints,
     },
   });
 }

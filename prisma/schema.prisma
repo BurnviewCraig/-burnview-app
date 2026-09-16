@@ -26,6 +26,7 @@ model User {
   dieselLogEntries DieselLogEntry[]
   groupFeedEntries GroupFeedEntry[]
   groupWeightEntries GroupWeightEntry[]
+  groupDimEntries GroupDimEntry[]
   additionalConcentrates AdditionalConcentrate[]
 }
 
@@ -82,6 +83,7 @@ model CattleGroup {
   milkEntries MilkProductionEntry[]
   feedEntries GroupFeedEntry[]
   weightEntries GroupWeightEntry[]
+  dimEntries  GroupDimEntry[]
   additionalConcentrates AdditionalConcentrate[]
 
   @@unique([farmId, name])
@@ -156,6 +158,23 @@ model GroupWeightEntry {
   groupId     String
   date        DateTime @db.Date
   avgWeightKg Float
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  group     CattleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id])
+
+  @@unique([groupId, date])
+}
+
+// One average days-in-milk (AFI calls it "days after calving") reading per
+// group per day — same "upsert corrects that day" pattern as weight/milk.
+model GroupDimEntry {
+  id            String   @id @default(cuid())
+  groupId       String
+  date          DateTime @db.Date
+  avgDaysInMilk Float
 
   createdById String?
   createdAt   DateTime @default(now())
