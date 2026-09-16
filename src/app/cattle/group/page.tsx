@@ -10,6 +10,7 @@ import { TrendChart, type ChartRange } from "@/components/TrendChart";
 import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { addDays } from "@/lib/calendarFormat";
+import { gramsPerLitre } from "@/lib/feedCalc";
 import type { CattleGroup, CattleCountEntry, GrazingAllocation, MilkProductionEntry, GroupFeedEntry, GroupWeightEntry } from "@/lib/types";
 
 function round1(n: number) {
@@ -31,6 +32,7 @@ type GridRow = {
   weightKg: number | null;
   grazing: string;
   dairyMealKg: number | null;
+  gramsPerLitre: number | null;
   otherName: string | null;
   otherKg: number | null;
   silageKg: number | null;
@@ -144,6 +146,7 @@ function GroupPageContent() {
         weightKg: w?.avgWeightKg ?? null,
         grazing: grazingLabel(d),
         dairyMealKg: f?.dairyMealKg ?? null,
+        gramsPerLitre: gramsPerLitre(f?.dairyMealKg, m?.litresPerCow),
         otherName: f?.otherConcentrateName ?? null,
         otherKg: f?.otherConcentrateKg ?? null,
         silageKg: f?.silageKg ?? null,
@@ -191,6 +194,7 @@ function GroupPageContent() {
             <th>Weight</th>
             <th>Grazing</th>
             <th>Dairy meal</th>
+            <th>g/L</th>
             <th>Other conc.</th>
             <th>Silage</th>
           </tr>
@@ -205,6 +209,7 @@ function GroupPageContent() {
               <td>{r.weightKg ?? "—"}{r.weightKg != null ? "kg" : ""}</td>
               <td>{r.grazing}</td>
               <td>{r.dairyMealKg ?? "—"}{r.dairyMealKg != null ? "kg" : ""}</td>
+              <td>{r.gramsPerLitre ?? "—"}</td>
               <td>{r.otherKg != null ? `${r.otherKg}kg${r.otherName ? ` (${r.otherName})` : ""}` : "—"}</td>
               <td>{r.silageKg ?? "—"}{r.silageKg != null ? "kg" : ""}</td>
             </tr>

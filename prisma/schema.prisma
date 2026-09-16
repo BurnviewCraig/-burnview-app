@@ -26,6 +26,7 @@ model User {
   dieselLogEntries DieselLogEntry[]
   groupFeedEntries GroupFeedEntry[]
   groupWeightEntries GroupWeightEntry[]
+  additionalConcentrates AdditionalConcentrate[]
 }
 
 model Farm {
@@ -81,6 +82,7 @@ model CattleGroup {
   milkEntries MilkProductionEntry[]
   feedEntries GroupFeedEntry[]
   weightEntries GroupWeightEntry[]
+  additionalConcentrates AdditionalConcentrate[]
 
   @@unique([farmId, name])
 }
@@ -516,4 +518,21 @@ model GroupFeedEntry {
   createdBy User?       @relation(fields: [createdById], references: [id])
 
   @@unique([groupId, date])
+}
+
+// A concentrate fed to a group at a standing kg/cow rate — set once and
+// only touched again when the mix actually changes, unlike the rest of the
+// feed data which is entered fresh every day.
+model AdditionalConcentrate {
+  id       String @id @default(cuid())
+  groupId  String
+  name     String
+  kgPerCow Float
+
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  group     CattleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  updatedBy User?       @relation(fields: [updatedById], references: [id])
 }

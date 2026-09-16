@@ -153,6 +153,31 @@ export type GroupFeedEntry = {
   silageKg: number | null;
 };
 
+export type AdditionalConcentrate = {
+  id: string;
+  groupId: string;
+  name: string;
+  kgPerCow: number;
+  updatedAt: string;
+};
+
+export type CattleSummary = {
+  current: {
+    count: number | null;
+    litresPerCow: number | null;
+    avgWeightKg: number | null;
+    dairyMealKg: number | null;
+    gramsPerLitre: number | null;
+  } | null;
+  trend: {
+    litres: { date: string; value: number }[];
+    weight: { date: string; value: number }[];
+    dairyMeal: { date: string; value: number }[];
+    gramsPerLitre: { date: string; value: number }[];
+    count: { date: string; value: number }[];
+  };
+};
+
 export type MilkSaleEntry = {
   id: string;
   farmId: string;
