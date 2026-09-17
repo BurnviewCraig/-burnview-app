@@ -182,6 +182,7 @@ async function importMilkShipments(source) {
   }
 
   let imported = 0;
+  let adopted = 0;
   let skipped = 0;
   for (const line of lines) {
     const cols = line.split(",");
@@ -196,14 +197,33 @@ async function importMilkShipments(source) {
     if (!quantity || Number.isNaN(quantity)) { skipped++; continue; }
 
     const sourceRef = sourceTag ? `${sourceTag}-${invoice}` : invoice;
-    await prisma.milkSaleEntry.upsert({
-      where: { sourceRef },
-      update: { farmId: farms[farmSlug].id, date: new Date(date), litres: quantity, takenBy: creamery || null },
-      create: { farmId: farms[farmSlug].id, date: new Date(date), litres: quantity, takenBy: creamery || null, sourceRef },
-    });
+    const farmId = farms[farmSlug].id;
+    const entryDate = new Date(date);
+
+    const existing = await prisma.milkSaleEntry.findUnique({ where: { sourceRef } });
+    if (existing) {
+      await prisma.milkSaleEntry.update({
+        where: { sourceRef },
+        data: { farmId, date: entryDate, litres: quantity, takenBy: creamery || null },
+      });
+    } else {
+      // The report always covers a rolling window of recent days, so a
+      // shipment can get logged manually (no sourceRef) before AFI's own
+      // export of it ever syncs through. Adopt that row instead of
+      // inserting a second one for the same real-world load.
+      const orphan = await prisma.milkSaleEntry.findFirst({
+        where: { farmId, date: entryDate, litres: quantity, sourceRef: null },
+      });
+      if (orphan) {
+        await prisma.milkSaleEntry.update({ where: { id: orphan.id }, data: { sourceRef, takenBy: creamery || null } });
+        adopted++;
+      } else {
+        await prisma.milkSaleEntry.create({ data: { farmId, date: entryDate, litres: quantity, takenBy: creamery || null, sourceRef } });
+      }
+    }
     imported++;
   }
-  console.log(`  Upserted ${imported} shipment(s), skipped ${skipped}.`);
+  console.log(`  Upserted ${imported} shipment(s) (${adopted} adopted from manual entries), skipped ${skipped}.`);
 }
 
 async function main() {
