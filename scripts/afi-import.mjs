@@ -1,21 +1,25 @@
 // Nightly AFI import — reads the CSVs AFI drops into shared OneDrive folders
 // and writes per-group averages / milk-sold rows into the app's DB.
 //
-// Run with:  node --env-file=.env scripts/afi-import.mjs
+// Run with:  node --env-file=.env scripts/afi-import.mjs [source]
 // (the --env-file flag loads DATABASE_URL the same way Next.js does, since
 // this runs standalone outside the Next.js server)
 //
-// Intended to run nightly via Windows Task Scheduler shortly after AFI's
-// 8pm export (currently scheduled 9pm). Safe to re-run: group readings are
-// upserted per (group, date), and milk-sold rows are deduped by AFI's own
-// invoice number (sourceRef), so a shipment entered into AFI late and
-// re-exported the next night won't be double-counted.
+// [source] is optional — "burnview" or "stockton" runs just that source's
+// import; omit it to run all sources (used for manual catch-up runs).
 //
-// Two separate AFI parlor systems feed this: Burnview/Everfair share one
-// (synced via the Burnview Dairy OneDrive account into "Craig Export"),
-// Stockton runs its own separate system (synced into this PC's personal
-// OneDrive as "Report Exports"). Each gets its own group/tank mapping below
-// since group and tank numbers are local to each system, not global.
+// Two separate AFI parlor systems feed this, each on its own schedule since
+// their exports land at different times of night: Burnview/Everfair share
+// one (synced via the Burnview Dairy OneDrive account into "Craig Export",
+// run at 9pm), Stockton runs its own separate system (synced into this PC's
+// personal OneDrive as "Report Exports", run at 11pm since its export lands
+// later, around 10pm). Each gets its own group/tank mapping below since
+// group and tank numbers are local to each system, not global.
+//
+// Safe to re-run: group readings are upserted per (group, date), and
+// milk-sold rows are deduped by AFI's own invoice number (sourceRef), so a
+// shipment entered into AFI late and re-exported the next night won't be
+// double-counted.
 
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
@@ -23,6 +27,7 @@ import { PrismaClient } from "@prisma/client";
 
 const SOURCES = [
   {
+    key: "burnview",
     name: "Burnview/Everfair",
     exportDir:
       process.env.AFI_EXPORT_DIR ||
@@ -43,11 +48,10 @@ const SOURCES = [
     sourceTag: null,
   },
   {
+    key: "stockton",
     name: "Stockton",
     exportDir: process.env.AFI_STOCKTON_EXPORT_DIR || "C:\\Users\\craig\\OneDrive\\Report Exports",
     // Group 70 is Stockton's hospital pen, left out same as Burnview's.
-    // This system's export has no "After calving" column, so DIM just
-    // won't be populated for Stockton — that's fine, it stays null.
     groupMap: {
       1: { farmSlug: "stockton", groupName: "SA" },
       2: { farmSlug: "stockton", groupName: "SB" },
@@ -102,8 +106,8 @@ async function importCraigReport(source) {
     const yield_ = cols[4] === "--" || cols[4] === "" ? null : Number(cols[4]);
     const weight = cols[5] === "--" || cols[5] === "" ? null : Number(cols[5]);
     // "After calving" — AFI's days-since-calving column, i.e. days in milk.
-    // Not every AFI system's export includes it (Stockton's doesn't), in
-    // which case cols[6] is just undefined and dim stays null throughout.
+    // Not every export includes it, in which case cols[6] is just undefined
+    // and dim stays null throughout.
     const dim = cols[6] === "--" || cols[6] === "" || cols[6] == null ? null : Number(cols[6]);
 
     const g = (byGroup[grp] ??= { count: 0, yieldSum: 0, yieldN: 0, weightSum: 0, weightN: 0, feedSum: 0, feedN: 0, dimSum: 0, dimN: 0 });
@@ -203,7 +207,12 @@ async function importMilkShipments(source) {
 }
 
 async function main() {
-  for (const source of SOURCES) {
+  const filterKey = process.argv[2];
+  const sources = filterKey ? SOURCES.filter((s) => s.key === filterKey) : SOURCES;
+  if (filterKey && !sources.length) {
+    throw new Error(`Unknown source "${filterKey}" — expected one of: ${SOURCES.map((s) => s.key).join(", ")}`);
+  }
+  for (const source of sources) {
     console.log(`\n=== ${source.name} — folder: ${source.exportDir} ===`);
     await importCraigReport(source);
     await importMilkShipments(source);
