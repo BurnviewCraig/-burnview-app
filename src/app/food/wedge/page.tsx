@@ -32,6 +32,13 @@ function CoverLabel({ x, y, width, value }: { x?: string | number; y?: string | 
 // keeps the wedge to one page wide regardless of how many paddocks there are.
 const PRINT_CHART_WIDTH = 950;
 
+// Must match the YAxis width + right margin on both charts below, so the
+// plain-HTML label row lines up with the bars Recharts actually draws
+// inside that reserved space — otherwise every label sits shifted left of
+// its bar, worst at the left edge where it overlaps the axis itself.
+const CHART_Y_AXIS_WIDTH = 38;
+const CHART_RIGHT_MARGIN = 4;
+
 function WedgeCharts({
   width,
   sorted,
@@ -47,9 +54,9 @@ function WedgeCharts({
 }) {
   return (
     <>
-      <ComposedChart width={width} height={230} data={sorted} margin={{ top: 50, right: 4, left: 0, bottom: 0 }}>
+      <ComposedChart width={width} height={230} data={sorted} margin={{ top: 50, right: CHART_RIGHT_MARGIN, left: 0, bottom: 0 }}>
         <XAxis dataKey="id" hide />
-        <YAxis width={38} tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Cover kg DM/ha", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
+        <YAxis width={CHART_Y_AXIS_WIDTH} tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Cover kg DM/ha", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
         <Tooltip
           formatter={(v: number, name: string) => [v, name === "greenCover" ? "Last week" : "Growth since"]}
           labelFormatter={(code) => code}
@@ -69,12 +76,12 @@ function WedgeCharts({
         <Line type="linear" dataKey="trend" stroke={COLORS.trend} strokeWidth={1.5} dot={false} isAnimationActive={false} />
       </ComposedChart>
 
-      <div className="wedge-axis-labels" style={{ width }}>
+      <div className="wedge-axis-labels" style={{ width, paddingLeft: CHART_Y_AXIS_WIDTH, paddingRight: CHART_RIGHT_MARGIN, boxSizing: "border-box" }}>
         {sorted.map((p) => (
           <div
             key={p.id}
             className={`wedge-axis-label${selectedId === p.id ? " selected" : ""}`}
-            style={{ width: width / sorted.length }}
+            style={{ width: (width - CHART_Y_AXIS_WIDTH - CHART_RIGHT_MARGIN) / sorted.length }}
             onClick={onBarClick ? () => onBarClick(p) : undefined}
           >
             {p.code}{p.daysSinceDefoliation != null ? `(${p.daysSinceDefoliation})` : ""}
@@ -82,9 +89,9 @@ function WedgeCharts({
         ))}
       </div>
 
-      <BarChart width={width} height={120} data={sorted} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
+      <BarChart width={width} height={120} data={sorted} margin={{ top: 0, right: CHART_RIGHT_MARGIN, left: 0, bottom: 0 }}>
         <XAxis dataKey="id" hide />
-        <YAxis width={38} reversed tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Days since mulched", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
+        <YAxis width={CHART_Y_AXIS_WIDTH} reversed tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Days since mulched", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
         <Tooltip
           formatter={(v) => [v == null ? "Never logged" : `${v} days`, "Since mulched"]}
           labelFormatter={(code) => code}
