@@ -31,7 +31,7 @@ const SOURCES = [
     name: "Burnview/Everfair",
     exportDir:
       process.env.AFI_EXPORT_DIR ||
-      "C:\\Users\\craig\\OneDrive - Burnview\\Burnview Dairy's files - Craig Export",
+      "C:\\Users\\craig\\OneDrive - Burnview\\Burnview Dairy's files - Craig Export 1",
     // AFI group number -> which farm + which CattleGroup.name it is. 70/71
     // are the Burnview/Everfair hospital pens — deliberately not one of the
     // four tracked groups, so they're just left out.
