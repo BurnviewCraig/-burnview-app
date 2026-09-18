@@ -60,3 +60,16 @@ export function daysBetween(a: Date | string, b: Date | string) {
   const db = new Date(b);
   return Math.round((db.getTime() - da.getTime()) / 86400000);
 }
+
+// Some on-screen numeric keypads insert a locale decimal comma instead of a
+// period — a native type="number" input rejects that character outright
+// (per the HTML spec it only ever accepts "."), so the keypress silently
+// does nothing and the field looks broken. Strips it down to a plain
+// decimal string (accepting either separator) so type="text" can be used
+// instead, which never rejects a keystroke.
+export function sanitizeDecimalInput(raw: string): string {
+  const cleaned = raw.replace(",", ".").replace(/[^0-9.]/g, "");
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot === -1) return cleaned;
+  return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+}

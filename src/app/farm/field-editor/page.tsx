@@ -6,7 +6,7 @@ import { X, UploadCloud, Plus, Trash2, ClipboardList, CheckSquare } from "lucide
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
-import { byPaddockNumber } from "@/lib/utils";
+import { byPaddockNumber, sanitizeDecimalInput } from "@/lib/utils";
 import { LAND_TYPES } from "@/lib/constants";
 import type { Farm, Paddock } from "@/lib/types";
 
@@ -313,10 +313,10 @@ export default function FieldEditorPage() {
             <span className="field-label">Size (ha)</span>
             <input
               className="field-input small"
-              type="number"
+              type="text"
               inputMode="decimal"
               value={area}
-              onChange={(e) => setArea(e.target.value)}
+              onChange={(e) => setArea(sanitizeDecimalInput(e.target.value))}
               placeholder="e.g. 8.2"
             />
           </label>

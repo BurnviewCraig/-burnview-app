@@ -1,5 +1,8 @@
+import { FARM_SECTIONS } from "@/lib/constants";
+
 export type RawActivity = {
   id: string;
+  farmId: string;
   date: string;
   type: "FERTILIZER" | "MULCHING" | "PLANTING" | "LAND_PREP" | "SPRAYING" | "MOWING" | "BAILING";
   product: string | null;
@@ -11,7 +14,7 @@ export type RawActivity = {
   bales: number | null;
   notes: string | null;
   paddock: { code: string; sizeHa: number | null };
-  farm: { name: string };
+  farm: { name: string; slug: string };
 };
 export type RawWalk = {
   id: string;
@@ -65,16 +68,79 @@ export type MilkSaleGroup = {
   totalLitres: number;
 };
 
+// One product+rate application collapsed into a single calendar entry —
+// fertilizer usually goes out across a whole section at once, so one row
+// per paddock would bury the rest of the day's entries under 20-80 nearly
+// identical lines. Edit/delete an individual paddock's entry from the farm
+// map instead; this is a read-only summary, same as the grazing rows.
+export type FertilizerGroup = {
+  farmId: string;
+  farmName: string;
+  date: string;
+  product: string | null;
+  rate: number | null;
+  paddockCodes: string[];
+};
+
 export type CalendarEvent = {
   id: string;
   farmName: string;
   label: string;
-  raw: RawActivity | WalkGroup | RawGrazing | MilkSaleGroup;
+  raw: RawActivity | WalkGroup | RawGrazing | MilkSaleGroup | FertilizerGroup;
   isWalk: boolean;
   isGrazing?: boolean;
   isWalkGroup?: boolean;
   isMilkSale?: boolean;
+  isFertilizerGroup?: boolean;
 };
+
+// Collapses a list of paddock codes sharing the same treatment into a
+// compact label: consecutive numeric runs become "R1-25", and a run that
+// exactly matches one of the farm's named sections (see FARM_SECTIONS)
+// shows that name instead — e.g. "Main Drag Lines" rather than "R1-25".
+// Anything that doesn't parse as a prefix+number (an odd one-off code)
+// just gets listed as-is.
+export function formatPaddockGroup(codes: string[], farmSlug: string): string {
+  const parsed = codes.map((code) => {
+    const m = code.match(/^([A-Za-z]*)(\d+)$/);
+    return m ? { code, prefix: m[1], num: parseInt(m[2], 10) } : null;
+  });
+  const numeric = parsed.filter((p): p is { code: string; prefix: string; num: number } => p != null);
+  const numericCodes = new Set(numeric.map((p) => p.code));
+  const nonNumeric = codes.filter((c) => !numericCodes.has(c));
+
+  const byPrefix = new Map<string, number[]>();
+  for (const p of numeric) byPrefix.set(p.prefix, [...(byPrefix.get(p.prefix) ?? []), p.num]);
+
+  const pieces: string[] = [];
+  for (const [prefix, nums] of byPrefix) {
+    const sorted = [...new Set(nums)].sort((a, b) => a - b);
+    let runStart = sorted[0];
+    let runEnd = sorted[0];
+    const flushRun = () => {
+      const runCodes: string[] = [];
+      for (let i = runStart; i <= runEnd; i++) runCodes.push(`${prefix}${i}`);
+      const section = FARM_SECTIONS.find(
+        (s) => s.farmSlug === farmSlug && s.codes.length === runCodes.length && s.codes.every((c, idx) => c === runCodes[idx])
+      );
+      if (section) pieces.push(section.name);
+      else if (runStart === runEnd) pieces.push(`${prefix}${runStart}`);
+      else pieces.push(`${prefix}${runStart}-${runEnd}`);
+    };
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === runEnd + 1) runEnd = sorted[i];
+      else { flushRun(); runStart = sorted[i]; runEnd = sorted[i]; }
+    }
+    flushRun();
+  }
+  pieces.push(...nonNumeric);
+  return pieces.join(", ");
+}
+
+export function fertilizerGroupLabel(g: FertilizerGroup, farmSlug: string): string {
+  const rate = g.rate ? ` ${g.rate}kg/ha` : "";
+  return `Fertilizer — ${g.product ?? ""}${rate} — ${formatPaddockGroup(g.paddockCodes, farmSlug)}`;
+}
 
 export const TYPE_LABEL: Record<string, string> = {
   FERTILIZER: "Fertilizer",
@@ -135,7 +201,29 @@ export function grazingLabel(g: RawGrazing): string {
 export function eventsFromCalendarData(
   data: { activities: RawActivity[]; walks: RawWalk[]; grazing?: RawGrazing[]; milkSales?: RawMilkSale[] } | null
 ): CalendarEvent[] {
-  const acts = (data?.activities ?? []).map((a) => ({ id: a.id, farmName: a.farm.name, label: activityLabel(a), raw: a, isWalk: false }));
+  const allActivities = data?.activities ?? [];
+  const fertActivities = allActivities.filter((a) => a.type === "FERTILIZER");
+  const otherActivities = allActivities.filter((a) => a.type !== "FERTILIZER");
+  const acts = otherActivities.map((a) => ({ id: a.id, farmName: a.farm.name, label: activityLabel(a), raw: a, isWalk: false }));
+
+  const fertGroupMap = new Map<string, FertilizerGroup & { farmSlug: string }>();
+  for (const a of fertActivities) {
+    const date = a.date.slice(0, 10);
+    const key = `${a.farmId}|${date}|${a.product ?? ""}|${a.rate ?? ""}`;
+    const existing = fertGroupMap.get(key);
+    if (existing) existing.paddockCodes.push(a.paddock.code);
+    else fertGroupMap.set(key, { farmId: a.farmId, farmName: a.farm.name, farmSlug: a.farm.slug, date, product: a.product, rate: a.rate, paddockCodes: [a.paddock.code] });
+  }
+  const fertGroups: CalendarEvent[] = [...fertGroupMap.values()]
+    .sort((a, b) => (Math.min(...a.paddockCodes.map(numPart)) - Math.min(...b.paddockCodes.map(numPart))))
+    .map((g) => ({
+      id: `fert-${g.farmId}-${g.date}-${g.product}-${g.rate}`,
+      farmName: g.farmName,
+      label: fertilizerGroupLabel(g, g.farmSlug),
+      raw: g,
+      isWalk: false,
+      isFertilizerGroup: true,
+    }));
 
   const walkGroups = new Map<string, WalkGroup>();
   (data?.walks ?? []).forEach((w) => {
@@ -178,14 +266,24 @@ export function eventsFromCalendarData(
     isMilkSale: true,
   }));
   // Within a day, grazing (cows) and milk sold lead — watched every day, must
-  // never be buried — then mulching, then everything else. Sort is stable so
-  // ties keep their original relative order.
+  // never be buried — then mulching, then everything else, then fertilizer
+  // last (there can be a lot of it, and it's rarely the thing someone's
+  // checking the calendar for). Sort is stable so ties keep their original
+  // relative order.
   const priority = (e: CalendarEvent): number => {
     if (e.isGrazing || e.isMilkSale) return 0;
+    if (e.isFertilizerGroup) return 3;
     if (!e.isWalk && (e.raw as RawActivity).type === "MULCHING") return 1;
     return 2;
   };
-  return [...acts, ...walks, ...grazing, ...milkSales].sort((a, b) => priority(a) - priority(b));
+  return [...acts, ...walks, ...grazing, ...milkSales, ...fertGroups].sort((a, b) => priority(a) - priority(b));
+}
+
+// Trailing numeric part of a paddock code (R41 -> 41), for ordering by
+// farm position; codes with no trailing number sort last.
+function numPart(code: string): number {
+  const m = code.match(/(\d+)$/);
+  return m ? parseInt(m[1], 10) : Infinity;
 }
 
 // Pure calendar-date arithmetic in UTC throughout (parse and format both as

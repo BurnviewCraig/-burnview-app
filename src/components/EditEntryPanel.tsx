@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Trash2 } from "lucide-react";
 import { useApi } from "@/lib/useApi";
+import { sanitizeDecimalInput } from "@/lib/utils";
 import { LAND_PREP_METHODS, BALE_TYPES, CROP_TYPES, CROP_UNITS } from "@/lib/constants";
 import type { FertilizerType, ChemicalType, SeedVariety } from "@/lib/types";
 
@@ -267,10 +268,10 @@ export function EditEntryPanel({
                         </select>
                         <input
                           className="field-input small"
-                          type="number"
+                          type="text"
                           inputMode="decimal"
                           value={row.rate}
-                          onChange={(e) => updateChemRow(row.rowId, { rate: e.target.value })}
+                          onChange={(e) => updateChemRow(row.rowId, { rate: sanitizeDecimalInput(e.target.value) })}
                           placeholder="Rate"
                         />
                         <span className="chem-row-unit">{chemTypes.find((c) => c.name === row.name)?.unit ?? ""}</span>

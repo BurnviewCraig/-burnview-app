@@ -5,6 +5,7 @@ import { Trash2, Pencil } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
+import { sanitizeDecimalInput } from "@/lib/utils";
 import type { Farm, CattleGroup, AdditionalConcentrate, GroupFeedEntry } from "@/lib/types";
 
 function GroupConcentrates({ group }: { group: CattleGroup }) {
@@ -94,7 +95,7 @@ function GroupConcentrates({ group }: { group: CattleGroup }) {
       {showForm ? (
         <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
           <input className="field-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Molasses" style={{ flex: 1, minWidth: 120 }} />
-          <input className="field-input" type="number" inputMode="decimal" value={kg} onChange={(e) => setKg(e.target.value)} placeholder="kg/cow" style={{ width: 90 }} />
+          <input className="field-input" type="text" inputMode="decimal" value={kg} onChange={(e) => setKg(sanitizeDecimalInput(e.target.value))} placeholder="kg/cow" style={{ width: 90 }} />
           <button className="save-btn small" onClick={save} disabled={saving || !name.trim() || kg === ""}>{saving ? "Saving…" : "Save"}</button>
           <button className="link-btn" onClick={cancel}>Cancel</button>
         </div>

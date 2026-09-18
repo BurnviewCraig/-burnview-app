@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   const [activities, walks, grazing, groups, milkSales] = await Promise.all([
     prisma.fieldActivity.findMany({
       where: { date: dateFilter, ...(farmId ? { farmId } : {}) },
-      include: { paddock: { select: { code: true, sizeHa: true } }, farm: { select: { name: true } } },
+      include: { paddock: { select: { code: true, sizeHa: true } }, farm: { select: { name: true, slug: true } } },
       orderBy: { date: "asc" },
     }),
     prisma.pastureWalk.findMany({

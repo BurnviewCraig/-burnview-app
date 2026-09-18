@@ -8,7 +8,7 @@ import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { TrendChart, type ChartRange } from "@/components/TrendChart";
 import { useApi } from "@/lib/useApi";
-import { todayStr } from "@/lib/utils";
+import { todayStr, sanitizeDecimalInput } from "@/lib/utils";
 import { addDays } from "@/lib/calendarFormat";
 import { gramsPerLitre } from "@/lib/feedCalc";
 import type { CattleGroup, CattleCountEntry, GrazingAllocation, MilkProductionEntry, GroupFeedEntry, GroupWeightEntry, GroupDimEntry } from "@/lib/types";
@@ -419,12 +419,12 @@ function DayEditSheet({
 
           <label className="field">
             <span className="field-label">Group yield (litres per cow)</span>
-            <input className="field-input" type="number" inputMode="decimal" value={milk} onChange={(e) => setMilk(e.target.value)} placeholder="L/cow" />
+            <input className="field-input" type="text" inputMode="decimal" value={milk} onChange={(e) => setMilk(sanitizeDecimalInput(e.target.value))} placeholder="L/cow" />
           </label>
 
           <label className="field">
             <span className="field-label">Average weight (kg)</span>
-            <input className="field-input" type="number" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="kg" />
+            <input className="field-input" type="text" inputMode="decimal" value={weight} onChange={(e) => setWeight(sanitizeDecimalInput(e.target.value))} placeholder="kg" />
           </label>
 
           <label className="field">
@@ -434,20 +434,20 @@ function DayEditSheet({
 
           <label className="field">
             <span className="field-label">Dairy meal fed (kg)</span>
-            <input className="field-input" type="number" inputMode="decimal" value={dairyMeal} onChange={(e) => setDairyMeal(e.target.value)} placeholder="kg" />
+            <input className="field-input" type="text" inputMode="decimal" value={dairyMeal} onChange={(e) => setDairyMeal(sanitizeDecimalInput(e.target.value))} placeholder="kg" />
           </label>
 
           <label className="field">
             <span className="field-label">Other concentrate</span>
             <div style={{ display: "flex", gap: 8 }}>
               <input className="field-input" value={otherName} onChange={(e) => setOtherName(e.target.value)} placeholder="What was fed" style={{ flex: 1 }} />
-              <input className="field-input" type="number" inputMode="decimal" value={otherKg} onChange={(e) => setOtherKg(e.target.value)} placeholder="kg" style={{ width: 90 }} />
+              <input className="field-input" type="text" inputMode="decimal" value={otherKg} onChange={(e) => setOtherKg(sanitizeDecimalInput(e.target.value))} placeholder="kg" style={{ width: 90 }} />
             </div>
           </label>
 
           <label className="field">
             <span className="field-label">Silage fed (kg)</span>
-            <input className="field-input" type="number" inputMode="decimal" value={silage} onChange={(e) => setSilage(e.target.value)} placeholder="kg" />
+            <input className="field-input" type="text" inputMode="decimal" value={silage} onChange={(e) => setSilage(sanitizeDecimalInput(e.target.value))} placeholder="kg" />
           </label>
 
           <p className="field-hint">Grazing location is set from Grass &gt; Grazing allocation, not here.</p>

@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
-import { todayStr } from "@/lib/utils";
+import { todayStr, sanitizeDecimalInput } from "@/lib/utils";
 import type { Farm, RainfallEntry } from "@/lib/types";
 
 const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
@@ -80,7 +80,7 @@ export default function RainfallPage() {
             <span className="field-label">Rainfall (mm)</span>
             <div style={{ display: "flex", gap: 8 }}>
               <input className="field-input" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
-              <input className="field-input" type="number" inputMode="decimal" value={mm} onChange={(e) => setMm(e.target.value)} placeholder="mm" style={{ width: 90 }} />
+              <input className="field-input" type="text" inputMode="decimal" value={mm} onChange={(e) => setMm(sanitizeDecimalInput(e.target.value))} placeholder="mm" style={{ width: 90 }} />
             </div>
           </label>
           <button className="save-btn" onClick={handleSave} disabled={saving || mm === ""}>

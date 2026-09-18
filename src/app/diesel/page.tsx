@@ -7,7 +7,7 @@ import { X, Plus, Trash2, History, ChevronLeft, ChevronRight, ChevronUp, Chevron
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
-import { byPaddockNumber, todayStr } from "@/lib/utils";
+import { byPaddockNumber, todayStr, sanitizeDecimalInput } from "@/lib/utils";
 import { addDays } from "@/lib/calendarFormat";
 import { computeDieselByDate } from "@/lib/dieselCalc";
 import type { Farm, DieselAsset, DieselLogEntry, DieselActivityType, Worker } from "@/lib/types";
@@ -480,17 +480,17 @@ function AssetEntryPanel({
                 <span className="field-label">Opening {asset.unit === "HOURS" ? "hours" : "km"}</span>
                 <input
                   className="field-input"
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   value={opening}
-                  onChange={(e) => setOpening(e.target.value)}
+                  onChange={(e) => setOpening(sanitizeDecimalInput(e.target.value))}
                   placeholder={asset.unit === "HOURS" ? "e.g. 1204.5" : "e.g. 88210"}
                 />
               </label>
 
               <label className="field">
                 <span className="field-label">Litres filled (only on a fill day)</span>
-                <input className="field-input" type="number" inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} placeholder="Leave blank if you didn't fill today" />
+                <input className="field-input" type="text" inputMode="decimal" value={litres} onChange={(e) => setLitres(sanitizeDecimalInput(e.target.value))} placeholder="Leave blank if you didn't fill today" />
                 <span className="field-hint">Doesn&apos;t need to be every day — if it&apos;s a few days between fills, this fill gets spread back over the days worked since the last one, by hours/km worked each day.</span>
               </label>
 

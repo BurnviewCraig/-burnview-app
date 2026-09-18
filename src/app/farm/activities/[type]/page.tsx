@@ -6,8 +6,8 @@ import { X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
-import { byPaddockNumber, todayStr } from "@/lib/utils";
-import { CROP_TYPES, CROP_TO_LAND_TYPE, CROP_UNITS, LAND_PREP_METHODS, BALE_TYPES } from "@/lib/constants";
+import { byPaddockNumber, todayStr, sanitizeDecimalInput } from "@/lib/utils";
+import { CROP_TYPES, CROP_TO_LAND_TYPE, CROP_UNITS, LAND_PREP_METHODS, BALE_TYPES, FARM_SECTIONS } from "@/lib/constants";
 import type { Farm, ChemicalType, FertilizerType, SeedVariety } from "@/lib/types";
 
 type ChemRow = { rowId: string; chemicalTypeId: string; rate: string };
@@ -134,6 +134,11 @@ export default function ActivityFormPage({ params }: { params: Promise<{ type: s
     setSelected((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   const selectAll = () => setSelected(eligiblePaddocks.map((p) => p.id));
   const clearAll = () => setSelected([]);
+  const selectSection = (codes: string[]) => {
+    const ids = eligiblePaddocks.filter((p) => codes.includes(p.code)).map((p) => p.id);
+    setSelected((prev) => [...new Set([...prev, ...ids])]);
+  };
+  const farmSections = useMemo(() => (farm ? FARM_SECTIONS.filter((s) => s.farmSlug === farm.slug) : []), [farm]);
 
   const canSave = isBailing
     ? !!date && !!baleType && validBaleRows.length > 0
@@ -465,10 +470,10 @@ export default function ActivityFormPage({ params }: { params: Promise<{ type: s
                         </select>
                         <input
                           className="field-input small"
-                          type="number"
+                          type="text"
                           inputMode="decimal"
                           value={row.rate}
-                          onChange={(e) => updateChemRow(row.rowId, { rate: e.target.value })}
+                          onChange={(e) => updateChemRow(row.rowId, { rate: sanitizeDecimalInput(e.target.value) })}
                           placeholder="Rate"
                         />
                         <span className="chem-row-unit">{selectedType?.unit ?? ""}</span>
@@ -599,6 +604,15 @@ export default function ActivityFormPage({ params }: { params: Promise<{ type: s
             </div>
             {isMulching && (
               <p className="field-hint" style={{ padding: "0 18px 8px" }}>Only rye grass and kikuyu fields can be mulched.</p>
+            )}
+            {isFertilizer && farmSections.length > 0 && (
+              <div className="chip-wrap" style={{ padding: "0 18px 8px" }}>
+                {farmSections.map((s) => (
+                  <button key={s.name} className="range-chip" onClick={() => selectSection(s.codes)}>
+                    {s.name}
+                  </button>
+                ))}
+              </div>
             )}
             <div className="paddock-picker-list">
               {eligiblePaddocks.map((p) => {

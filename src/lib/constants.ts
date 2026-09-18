@@ -233,3 +233,26 @@ export const ORDER_NUMBER_ISSUERS = [
   { name: "Hayden", prefix: "HS" },
   { name: "Thomas", prefix: "TS" },
 ] as const;
+
+function rCodes(start: number, end: number): string[] {
+  const codes: string[] = [];
+  for (let i = start; i <= end; i++) codes.push(`R${i}`);
+  return codes;
+}
+
+// Burnview's named drag-line/pivot groupings — lets fertilizer data entry
+// offer "select this whole section" as one click, and lets the calendar
+// collapse a section's worth of same-day, same-treatment entries down to
+// its name instead of listing every camp.
+export const FARM_SECTIONS: { farmSlug: string; name: string; codes: string[] }[] = [
+  { farmSlug: "burnview", name: "Main Drag Lines", codes: rCodes(1, 25) },
+  { farmSlug: "burnview", name: "House Drag Lines", codes: rCodes(26, 29) },
+  { farmSlug: "burnview", name: "Poplar Pivot", codes: rCodes(30, 36) },
+  { farmSlug: "burnview", name: "Steyn Pivot", codes: rCodes(37, 46) },
+  { farmSlug: "burnview", name: "Glenroy Pivot", codes: rCodes(47, 54) },
+  { farmSlug: "burnview", name: "Smithfield Pivot", codes: rCodes(55, 61) },
+  { farmSlug: "burnview", name: "Half Pivot", codes: rCodes(62, 68) },
+  { farmSlug: "burnview", name: "Road Drag Lines", codes: rCodes(69, 73) },
+  { farmSlug: "burnview", name: "Bongaan Pivot", codes: rCodes(74, 77) },
+  { farmSlug: "burnview", name: "M10 Pivot", codes: rCodes(78, 81) },
+];

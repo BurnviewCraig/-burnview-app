@@ -7,7 +7,7 @@ import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { TrendChart, type ChartRange } from "@/components/TrendChart";
 import { useApi } from "@/lib/useApi";
-import { todayStr } from "@/lib/utils";
+import { todayStr, sanitizeDecimalInput } from "@/lib/utils";
 import type { Farm, MilkSaleEntry } from "@/lib/types";
 
 function monthKey(d: Date) {
@@ -141,7 +141,7 @@ function MilkSoldForm() {
             <span className="field-label">Litres sold</span>
             <div style={{ display: "flex", gap: 8 }}>
               <input className="field-input" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
-              <input className="field-input" type="number" inputMode="decimal" value={litres} onChange={(e) => setLitres(e.target.value)} placeholder="Litres" style={{ width: 90 }} />
+              <input className="field-input" type="text" inputMode="decimal" value={litres} onChange={(e) => setLitres(sanitizeDecimalInput(e.target.value))} placeholder="Litres" style={{ width: 90 }} />
             </div>
           </label>
 
