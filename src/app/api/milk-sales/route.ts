@@ -7,14 +7,14 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const farmId = searchParams.get("farmId");
-  if (!farmId) {
-    return NextResponse.json({ error: "farmId is required" }, { status: 400 });
-  }
   const entries = await prisma.milkSaleEntry.findMany({
-    where: { farmId },
+    where: farmId ? { farmId } : undefined,
+    include: { farm: { select: { name: true } } },
     orderBy: { date: "desc" },
   });
-  return NextResponse.json({ entries });
+  return NextResponse.json({
+    entries: entries.map((e) => ({ id: e.id, farmId: e.farmId, farmName: e.farm.name, date: e.date, litres: e.litres, takenBy: e.takenBy })),
+  });
 }
 
 // Always creates a new collection — a farm can have several buyers taking

@@ -195,6 +195,7 @@ export type CattleSummary = {
 export type MilkSaleEntry = {
   id: string;
   farmId: string;
+  farmName?: string;
   date: string;
   litres: number;
   takenBy: string | null;

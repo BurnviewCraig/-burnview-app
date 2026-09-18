@@ -14,12 +14,15 @@ function monthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+const ALL_FARMS_ID = "__all__";
+
 function MilkSoldForm() {
   const params = useSearchParams();
   const { data: farmsData, loading } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
 
   const [farmId, setFarmId] = useState<string | null>(params.get("farmId"));
+  const showingAll = farmId === ALL_FARMS_ID;
   const farm = farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0];
 
   const [date, setDate] = useState(params.get("date") || todayStr());
@@ -29,7 +32,9 @@ function MilkSoldForm() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [range, setRange] = useState<ChartRange>("14d");
 
-  const { data, refetch } = useApi<{ entries: MilkSaleEntry[] }>(farm ? `/api/milk-sales?farmId=${farm.id}` : null);
+  const { data, refetch } = useApi<{ entries: MilkSaleEntry[] }>(
+    showingAll ? "/api/milk-sales" : farm ? `/api/milk-sales?farmId=${farm.id}` : null
+  );
   const entries = data?.entries ?? [];
 
   // Multiple buyers can collect on the same day, so the chart/comparison
@@ -73,6 +78,7 @@ function MilkSoldForm() {
   };
 
   const startEdit = (e: MilkSaleEntry) => {
+    if (showingAll) setFarmId(e.farmId); // jump into that entry's own farm tab to edit it
     setEditingId(e.id);
     setDate(e.date.slice(0, 10));
     setLitres(String(e.litres));
@@ -115,12 +121,14 @@ function MilkSoldForm() {
 
       <div className="tabs">
         {farms.map((f) => (
-          <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => switchFarm(f.id)}>{f.name}</button>
+          <button key={f.id} className={`tab${!showingAll && farm.id === f.id ? " active" : ""}`} onClick={() => switchFarm(f.id)}>{f.name}</button>
         ))}
+        <button className={`tab${showingAll ? " active" : ""}`} onClick={() => switchFarm(ALL_FARMS_ID)}>All Farms</button>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        <div className="wedge-info-box" style={{ margin: "12px 18px 0" }}>
+        <p className="field-hint" style={{ padding: "12px 18px 0", margin: 0 }}>{showingAll ? "Business" : farm.name} total</p>
+        <div className="wedge-info-box" style={{ margin: "6px 18px 0" }}>
           <div><span className="wib-k">This month</span><span className="wib-v">{monthComparison.thisTotal}L</span></div>
           <div><span className="wib-k">Last month</span><span className="wib-v">{monthComparison.lastTotal}L</span></div>
           {monthComparison.pct != null && (
@@ -132,40 +140,44 @@ function MilkSoldForm() {
           <TrendChart points={dailyTotals} range={range} onRangeChange={setRange} unit="L" yLabel="Litres sold" />
         </div>
 
-        <div className="form" style={{ padding: "12px 18px", gap: 12 }}>
-          <p className="ds-note">
-            A farm can have several buyers collecting on the same day — each save here adds a new collection rather than replacing the day&apos;s total.
-          </p>
+        {showingAll ? (
+          <p className="ds-note" style={{ padding: "12px 18px" }}>Pick a farm tab to log a new collection — this view is a read-only combined total.</p>
+        ) : (
+          <div className="form" style={{ padding: "12px 18px", gap: 12 }}>
+            <p className="ds-note">
+              A farm can have several buyers collecting on the same day — each save here adds a new collection rather than replacing the day&apos;s total.
+            </p>
 
-          <label className="field">
-            <span className="field-label">Litres sold</span>
+            <label className="field">
+              <span className="field-label">Litres sold</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input className="field-input" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
+                <input className="field-input" type="text" inputMode="decimal" value={litres} onChange={(e) => setLitres(sanitizeDecimalInput(e.target.value))} placeholder="Litres" style={{ width: 90 }} />
+              </div>
+            </label>
+
+            <label className="field">
+              <span className="field-label">Taken by</span>
+              <input className="field-input" value={takenBy} onChange={(e) => setTakenBy(e.target.value)} placeholder="e.g. driver, company or buyer name" />
+            </label>
+
             <div style={{ display: "flex", gap: 8 }}>
-              <input className="field-input" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
-              <input className="field-input" type="text" inputMode="decimal" value={litres} onChange={(e) => setLitres(sanitizeDecimalInput(e.target.value))} placeholder="Litres" style={{ width: 90 }} />
+              <button className="save-btn" onClick={handleSave} disabled={saving || litres === ""}>
+                {saving ? "Saving…" : editingId ? "Save changes" : "Save milk sold"}
+              </button>
+              {editingId && <button className="link-btn" onClick={resetForm}>Cancel edit</button>}
             </div>
-          </label>
-
-          <label className="field">
-            <span className="field-label">Taken by</span>
-            <input className="field-input" value={takenBy} onChange={(e) => setTakenBy(e.target.value)} placeholder="e.g. driver, company or buyer name" />
-          </label>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="save-btn" onClick={handleSave} disabled={saving || litres === ""}>
-              {saving ? "Saving…" : editingId ? "Save changes" : "Save milk sold"}
-            </button>
-            {editingId && <button className="link-btn" onClick={resetForm}>Cancel edit</button>}
           </div>
-        </div>
+        )}
 
         <div className="field" style={{ padding: "0 18px 18px" }}>
           <span className="field-label">History</span>
-          {entries.length === 0 && <p className="ds-note">No milk sold logged yet for {farm.name}.</p>}
+          {entries.length === 0 && <p className="ds-note">No milk sold logged yet for {showingAll ? "the business" : farm.name}.</p>}
           {entries.map((e) => (
             <div key={e.id} className={`settings-row${editingId === e.id ? " active" : ""}`}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <button className="link-btn" style={{ textAlign: "left" }} onClick={() => startEdit(e)}>
-                  {e.date.slice(0, 10)} — {e.litres}L{e.takenBy ? ` — ${e.takenBy}` : ""}
+                  {e.date.slice(0, 10)} — {e.litres}L{e.takenBy ? ` — ${e.takenBy}` : ""}{showingAll && e.farmName ? ` — ${e.farmName}` : ""}
                 </button>
                 <button className="link-btn" onClick={() => handleDelete(e.id)} aria-label="Delete milk sale">
                   <Trash2 size={14} strokeWidth={1.75} />
