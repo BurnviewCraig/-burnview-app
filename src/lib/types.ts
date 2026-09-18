@@ -48,6 +48,8 @@ export type WedgePaddock = {
   landType: string | null;
   sizeHa: number | null;
   cover: number | null;
+  prevCover: number | null;
+  wasDefoliated: boolean;
   hasData: boolean;
   growthPerDay: number | null;
   mulchDays: number | null;

@@ -13,7 +13,7 @@ import { isMeasuredRyeGrass, todayStr } from "@/lib/utils";
 import { COLORS } from "@/lib/constants";
 import type { WedgeFarm, WedgePaddock } from "@/lib/types";
 
-type Row = WedgePaddock & { trend: number };
+type Row = WedgePaddock & { trend: number; greenCover: number | null; blueCover: number | null };
 
 // Cover value printed just above each bar, rotated vertically so it stays
 // legible without needing extra width per paddock.
@@ -50,13 +50,18 @@ function WedgeCharts({
       <ComposedChart width={width} height={230} data={sorted} margin={{ top: 50, right: 4, left: 0, bottom: 0 }}>
         <YAxis width={38} tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Cover kg DM/ha", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
         <Tooltip
-          formatter={(v: number) => [v, "Cover"]}
+          formatter={(v: number, name: string) => [v, name === "greenCover" ? "Last week" : "Growth since"]}
           labelFormatter={(code) => code}
           contentStyle={{ fontSize: 11, background: COLORS.card, border: `1px solid ${COLORS.paperDeep}` }}
         />
-        <Bar dataKey="cover" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined}>
+        <Bar dataKey="greenCover" stackId="cover" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined}>
           {sorted.map((p) => (
             <Cell key={p.id} fill={!p.hasData ? COLORS.flagged : COLORS.normal} opacity={selectedId === p.id ? 1 : 0.92} />
+          ))}
+        </Bar>
+        <Bar dataKey="blueCover" stackId="cover" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined}>
+          {sorted.map((p) => (
+            <Cell key={p.id} fill={COLORS.grown} opacity={selectedId === p.id ? 1 : 0.92} />
           ))}
           <LabelList dataKey="cover" content={CoverLabel} />
         </Bar>
@@ -157,7 +162,23 @@ export default function FarmWedgePage() {
     const slope = n ? (n * sumXY - sumX * sumY) / denom : 0;
     const intercept = n ? (sumY - slope * sumX) / n : 0;
 
-    return combined.map((p, i) => ({ ...p, trend: Math.max(0, Math.round(intercept + slope * i)) }));
+    return combined.map((p, i) => {
+      let greenCover: number | null = null;
+      let blueCover: number | null = null;
+      if (p.hasData && p.cover != null) {
+        if (p.wasDefoliated || p.prevCover == null) {
+          // Grazed/mulched since the last walk (or there's no previous
+          // reading to compare against) — nothing to show as "growth on
+          // top of last week", so the whole bar reads as one block.
+          greenCover = p.cover;
+          blueCover = 0;
+        } else {
+          greenCover = Math.min(p.cover, p.prevCover);
+          blueCover = Math.max(0, p.cover - p.prevCover);
+        }
+      }
+      return { ...p, trend: Math.max(0, Math.round(intercept + slope * i)), greenCover, blueCover };
+    });
   }, [current]);
 
   const avgMulch = useMemo(() => {
@@ -231,7 +252,8 @@ export default function FarmWedgePage() {
           </div>
 
           <div className="wedge-legend">
-            <div><span className="wedge-swatch" style={{ background: COLORS.normal }} />Cover</div>
+            <div><span className="wedge-swatch" style={{ background: COLORS.normal }} />Last week&apos;s cover</div>
+            <div><span className="wedge-swatch" style={{ background: COLORS.grown }} />Growth since</div>
             <div><span className="wedge-swatch" style={{ background: COLORS.flagged }} />No data</div>
             <div><span className="wedge-swatch line" />Trend</div>
           </div>

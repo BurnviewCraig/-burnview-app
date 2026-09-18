@@ -68,14 +68,17 @@ export async function GET() {
       const [latest, prev] = p.pastureWalks;
       const hasData = latest != null && latest.cover > 0;
       const cover = hasData ? latest.cover : null;
+      const mulchDate = p.fieldActivities[0]?.date ?? null;
       let growthPerDay: number | null = null;
+      let wasDefoliated = false;
       if (hasData && prev && prev.cover > 0) {
         const days = daysBetween(prev.date, latest.date);
         if (days > 0) {
+          const grazedInWindow = p.grazingAllocations.filter((a) => a.date > prev.date && a.date <= latest.date);
+          const mulchedInWindow = mulchDate != null && mulchDate > prev.date && mulchDate <= latest.date;
+          wasDefoliated = grazedInWindow.length > 0 || mulchedInWindow;
           if (p.sizeHa) {
-            const sessionsGrazed = p.grazingAllocations
-              .filter((a) => a.date > prev.date && a.date <= latest.date)
-              .map((a) => ({ headcount: headcountAsOf(a.groupId, a.date) ?? 0 }));
+            const sessionsGrazed = grazedInWindow.map((a) => ({ headcount: headcountAsOf(a.groupId, a.date) ?? 0 }));
             growthPerDay = correctedGrowthPerDay({
               coverNow: latest.cover,
               coverPrevious: prev.cover,
@@ -88,7 +91,6 @@ export async function GET() {
           }
         }
       }
-      const mulchDate = p.fieldActivities[0]?.date ?? null;
       const mulchDays = mulchDate ? daysBetween(mulchDate, now) : null;
       const grazeDate = p.grazingAllocations[0]?.date ?? null;
       const grazeDays = grazeDate ? daysBetween(grazeDate, now) : null;
@@ -100,6 +102,8 @@ export async function GET() {
         landType: p.landType,
         sizeHa: p.sizeHa,
         cover,
+        prevCover: prev && prev.cover > 0 ? prev.cover : null,
+        wasDefoliated,
         hasData,
         growthPerDay: growthPerDay != null ? Math.round(growthPerDay * 10) / 10 : null,
         mulchDays,
