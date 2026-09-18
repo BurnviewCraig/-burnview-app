@@ -28,6 +28,8 @@ model User {
   groupWeightEntries GroupWeightEntry[]
   groupDimEntries GroupDimEntry[]
   additionalConcentrates AdditionalConcentrate[]
+  maizeFieldSeasons MaizeFieldSeason[]
+  maizePlantingPlans MaizePlantingPlan[]
 }
 
 model Farm {
@@ -48,6 +50,8 @@ model Farm {
   milkSales       MilkSaleEntry[]
   rainfallEntries RainfallEntry[]
   dieselAssets    DieselAsset[]
+  maizeFieldSeasons MaizeFieldSeason[]
+  maizePlantingPlans MaizePlantingPlan[]
 }
 
 model Paddock {
@@ -63,6 +67,7 @@ model Paddock {
   pastureWalks    PastureWalk[]
   stockEntries    StockEntry[]
   grazingAllocations GrazingAllocation[]
+  maizeFieldSeasons MaizeFieldSeason[]
 
   @@unique([farmId, code])
 }
@@ -554,4 +559,66 @@ model AdditionalConcentrate {
 
   group     CattleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   updatedBy User?       @relation(fields: [updatedById], references: [id])
+}
+
+// Maize is tracked separately from the general Field Activities /
+// Farm Map history since it's followed as its own crop+commodity, not
+// just another planting entry — actual harvests/sales (what happened)
+// vs. planning/marketing (what's planned or priced for a future season).
+// One growing season's full record for one specific field — most of this
+// is meant to fill itself in as the season's normal field activities get
+// logged elsewhere (see the auto-population in /api/field-activities):
+// planting sets variety/plantDate/population, spraying tracks the first
+// and last dates a tractor was in the field, fertilizer applied after
+// planting is assumed to be top-dressing (vs. basal, applied at/before
+// planting) and fills the two top-dressing dates. Everything else here
+// (maturity estimate, cut date, silage pit, seed cost, yield) has no
+// upstream source yet and stays a direct manual entry.
+model MaizeFieldSeason {
+  id        String @id @default(cuid())
+  farmId    String
+  paddockId String
+  season    String // e.g. "2025/26" — see lib/maizeSeason.ts
+
+  variety         String?
+  varietyLength   String? // e.g. "Medium", "120 days" — free text
+  plantDate       DateTime? @db.Date
+  estMaturityDate DateTime? @db.Date
+  cutDate         DateTime? @db.Date
+  population      Float? // seeds/plants per ha
+  yieldTonPerHa   Float?
+
+  firstPostSprayDate    DateTime? @db.Date
+  lastTractorEntryDate  DateTime? @db.Date
+  firstTopDressingDate  DateTime? @db.Date
+  secondTopDressingDate DateTime? @db.Date
+
+  silagePit     String?
+  seedCostPerHa Float?
+  notes         String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  farm      Farm    @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  paddock   Paddock @relation(fields: [paddockId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation(fields: [createdById], references: [id])
+
+  @@unique([paddockId, season])
+}
+
+model MaizePlantingPlan {
+  id            String   @id @default(cuid())
+  farmId        String
+  season        String // e.g. "2026/27"
+  plannedAreaHa Float?
+  variety       String?
+  notes         String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  farm      Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id])
 }

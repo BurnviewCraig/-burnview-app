@@ -369,6 +369,17 @@ a:visited { color: var(--ink); }
 .login-card { width: 100%; max-width: 340px; background: var(--card); border: 1px solid var(--paper-deep); border-radius: 14px; padding: 28px 24px; display:flex; flex-direction:column; gap: 16px; }
 .login-brand { display:flex; align-items:center; gap:8px; font-weight:700; font-size:16px; justify-content:center; margin-bottom: 4px; }
 
+.maize-sheet-scroll { overflow-x: auto; padding: 0 18px 18px; flex: 1; min-height: 0; }
+.maize-sheet-table { border-collapse: collapse; font-size: 11.5px; white-space: nowrap; }
+.maize-sheet-table th, .maize-sheet-table td { padding: 7px 10px; border: 1px solid var(--paper-deep); text-align: left; }
+.maize-sheet-table th { background: var(--paper); cursor: grab; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-soft); user-select: none; }
+.maize-sheet-table th.dragging { opacity: 0.4; }
+.maize-sheet-table tbody tr { cursor: pointer; }
+.maize-sheet-table tbody tr:hover td { background: var(--paper); }
+.maize-sheet-sticky { position: sticky; left: 0; background: var(--card); }
+.maize-sheet-table tbody tr:hover .maize-sheet-sticky { background: var(--paper); }
+.maize-sheet-table th.maize-sheet-sticky { background: var(--paper); z-index: 1; }
+
 .settings-row { display:flex; flex-direction:column; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--paper-deep); }
 .settings-row.active { background: var(--card); }
 .settings-row-head { display:flex; justify-content:space-between; align-items:center; }

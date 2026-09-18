@@ -270,3 +270,35 @@ export type DieselLogEntry = {
   comment: string | null;
   createdAt: string;
 };
+
+export type MaizeFieldSeason = {
+  id: string;
+  farmId: string;
+  paddockId: string;
+  paddockCode?: string;
+  season: string;
+  variety: string | null;
+  varietyLength: string | null;
+  plantDate: string | null;
+  estMaturityDate: string | null;
+  cutDate: string | null;
+  population: number | null;
+  yieldTonPerHa: number | null;
+  firstPostSprayDate: string | null;
+  lastTractorEntryDate: string | null;
+  firstTopDressingDate: string | null;
+  secondTopDressingDate: string | null;
+  silagePit: string | null;
+  seedCostPerHa: number | null;
+  notes: string | null;
+  updatedAt: string;
+};
+
+export type MaizePlantingPlan = {
+  id: string;
+  farmId: string;
+  season: string;
+  plannedAreaHa: number | null;
+  variety: string | null;
+  notes: string | null;
+};

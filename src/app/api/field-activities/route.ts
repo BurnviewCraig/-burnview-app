@@ -1,8 +1,62 @@
 import { NextResponse } from "next/server";
-import type { StockItem } from "@prisma/client";
+import type { StockItem, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { currentUserId } from "@/lib/session";
 import { LAND_PREP_METHODS, CROP_TO_LAND_TYPE } from "@/lib/constants";
+import { maizeSeasonFor } from "@/lib/maizeSeason";
+
+// Keeps each maize field's season record in step with the activities
+// actually logged against it — see the MaizeFieldSeason model comment for
+// which fields come from where. Only ever touches a paddock that's
+// already got a maize season on file (planting creates that first), so
+// this is a no-op for every other crop.
+async function autoPopulateMaize(
+  tx: Prisma.TransactionClient,
+  { farmId, paddockId, type, date, mix }: {
+    farmId: string;
+    paddockId: string;
+    type: string;
+    date: string;
+    mix?: { crop: string; variety: string | null; rate: number; unit: string }[];
+  }
+) {
+  const activityDate = new Date(date);
+
+  if (type === "PLANTING") {
+    const maizeRow = mix?.find((m) => m.crop === "Maize" && Number(m.rate) > 0);
+    if (!maizeRow) return;
+    const season = maizeSeasonFor(activityDate);
+    await tx.maizeFieldSeason.upsert({
+      where: { paddockId_season: { paddockId, season } },
+      update: { variety: maizeRow.variety || null, plantDate: activityDate, population: Number(maizeRow.rate) },
+      create: { farmId, paddockId, season, variety: maizeRow.variety || null, plantDate: activityDate, population: Number(maizeRow.rate) },
+    });
+    return;
+  }
+
+  if (type !== "SPRAYING" && type !== "FERTILIZER") return;
+
+  const current = await tx.maizeFieldSeason.findFirst({
+    where: { paddockId, plantDate: { lte: activityDate } },
+    orderBy: { plantDate: "desc" },
+  });
+  if (!current) return;
+
+  if (type === "SPRAYING") {
+    const data: { firstPostSprayDate?: Date; lastTractorEntryDate?: Date } = {};
+    if (!current.firstPostSprayDate || activityDate < current.firstPostSprayDate) data.firstPostSprayDate = activityDate;
+    if (!current.lastTractorEntryDate || activityDate > current.lastTractorEntryDate) data.lastTractorEntryDate = activityDate;
+    if (Object.keys(data).length) await tx.maizeFieldSeason.update({ where: { id: current.id }, data });
+  } else if (current.plantDate && activityDate > current.plantDate) {
+    // Fertilizer applied after planting is assumed to be top-dressing — a
+    // basal application at/before planting doesn't count as either date.
+    if (!current.firstTopDressingDate) {
+      await tx.maizeFieldSeason.update({ where: { id: current.id }, data: { firstTopDressingDate: activityDate } });
+    } else if (!current.secondTopDressingDate && activityDate > current.firstTopDressingDate) {
+      await tx.maizeFieldSeason.update({ where: { id: current.id }, data: { secondTopDressingDate: activityDate } });
+    }
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +153,8 @@ export async function POST(req: Request) {
         },
       });
       entries.push(entry);
+
+      await autoPopulateMaize(tx, { farmId, paddockId, type, date, mix });
 
       if (isTillage) {
         await tx.paddock.update({ where: { id: paddockId }, data: { landType: "Unplanted" } });
