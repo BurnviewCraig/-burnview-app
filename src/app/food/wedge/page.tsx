@@ -48,6 +48,7 @@ function WedgeCharts({
   return (
     <>
       <ComposedChart width={width} height={230} data={sorted} margin={{ top: 50, right: 4, left: 0, bottom: 0 }}>
+        <XAxis dataKey="id" hide />
         <YAxis width={38} tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Cover kg DM/ha", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
         <Tooltip
           formatter={(v: number, name: string) => [v, name === "greenCover" ? "Last week" : "Growth since"]}
@@ -82,6 +83,7 @@ function WedgeCharts({
       </div>
 
       <BarChart width={width} height={120} data={sorted} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
+        <XAxis dataKey="id" hide />
         <YAxis width={38} reversed tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Days since mulched", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
         <Tooltip
           formatter={(v) => [v == null ? "Never logged" : `${v} days`, "Since mulched"]}
