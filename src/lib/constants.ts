@@ -97,6 +97,9 @@ export const CROP_UNITS: Record<string, string> = {
   "White clover": "kg/ha",
 };
 
+// Seed trait/technology options for a maize variety.
+export const SEED_TRAIT_TYPES = ["Base", "Roundup Ready", "BT", "Roundup Ready and BT"];
+
 // Optional tag on a Spraying entry — feeds MaizeFieldSeason's auto-populate
 // (see /api/field-activities) when it's relevant to a maize field. Not
 // every spray fits one of these, so it's never required.

@@ -114,9 +114,11 @@ export type SeedVariety = {
   id: string;
   cropType: string;
   name: string;
+  brand: string | null;
   costPerBag: number | null;
   seedsPerBag: number | null;
   daysToMaturity: number | null;
+  traitType: string | null;
 };
 
 export type CattleGroup = {
@@ -307,9 +309,13 @@ export type MaizePlantingPlan = {
   farmName?: string;
   paddockId: string;
   paddockCode?: string;
+  varietyId: string | null;
+  variety?: SeedVariety | null;
+  phase: string | null;
   season: string;
   plannedAreaHa: number | null;
-  variety: string | null;
+  population: number | null;
   notes: string | null;
   sortOrder: number;
+  ordered: boolean;
 };

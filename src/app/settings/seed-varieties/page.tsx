@@ -6,7 +6,7 @@ import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
 import { sanitizeDecimalInput } from "@/lib/utils";
-import { CROP_TYPES } from "@/lib/constants";
+import { CROP_TYPES, SEED_TRAIT_TYPES } from "@/lib/constants";
 import type { SeedVariety } from "@/lib/types";
 
 export default function SeedVarietiesSettingsPage() {
@@ -15,9 +15,11 @@ export default function SeedVarietiesSettingsPage() {
 
   const [crop, setCrop] = useState<string>(CROP_TYPES[0]);
   const [name, setName] = useState("");
+  const [brand, setBrand] = useState("");
   const [costPerBag, setCostPerBag] = useState("");
   const [seedsPerBag, setSeedsPerBag] = useState("");
   const [daysToMaturity, setDaysToMaturity] = useState("");
+  const [traitType, setTraitType] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -27,18 +29,22 @@ export default function SeedVarietiesSettingsPage() {
   const resetForm = () => {
     setEditingId(null);
     setName("");
+    setBrand("");
     setCostPerBag("");
     setSeedsPerBag("");
     setDaysToMaturity("");
+    setTraitType("");
   };
 
   const startEdit = (v: SeedVariety) => {
     setEditingId(v.id);
     setCrop(v.cropType);
     setName(v.name);
+    setBrand(v.brand ?? "");
     setCostPerBag(v.costPerBag != null ? String(v.costPerBag) : "");
     setSeedsPerBag(v.seedsPerBag != null ? String(v.seedsPerBag) : "");
     setDaysToMaturity(v.daysToMaturity != null ? String(v.daysToMaturity) : "");
+    setTraitType(v.traitType ?? "");
   };
 
   const handleSave = async () => {
@@ -50,9 +56,11 @@ export default function SeedVarietiesSettingsPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          brand: brand.trim() || null,
           costPerBag: costPerBag !== "" ? Number(costPerBag) : null,
           seedsPerBag: seedsPerBag !== "" ? Number(seedsPerBag) : null,
           daysToMaturity: daysToMaturity !== "" ? Number(daysToMaturity) : null,
+          traitType: traitType || null,
         }),
       });
       setSaving(false);
@@ -66,9 +74,11 @@ export default function SeedVarietiesSettingsPage() {
       body: JSON.stringify({
         cropType: crop,
         name: name.trim(),
+        brand: brand.trim() || null,
         costPerBag: costPerBag !== "" ? Number(costPerBag) : null,
         seedsPerBag: seedsPerBag !== "" ? Number(seedsPerBag) : null,
         daysToMaturity: daysToMaturity !== "" ? Number(daysToMaturity) : null,
+        traitType: traitType || null,
       }),
     });
     setSaving(false);
@@ -121,6 +131,10 @@ export default function SeedVarietiesSettingsPage() {
         </label>
         {isMaize && (
           <>
+            <label className="field">
+              <span className="field-label">Brand</span>
+              <input className="field-input" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. Pannar" />
+            </label>
             <div style={{ display: "flex", gap: 8 }}>
               <label className="field" style={{ flex: 1 }}>
                 <span className="field-label">Cost/bag</span>
@@ -134,6 +148,14 @@ export default function SeedVarietiesSettingsPage() {
             <label className="field">
               <span className="field-label">Days to maturity</span>
               <input className="field-input" type="text" inputMode="decimal" value={daysToMaturity} onChange={(e) => setDaysToMaturity(sanitizeDecimalInput(e.target.value))} placeholder="e.g. 120" />
+            </label>
+            <label className="field">
+              <span className="field-label">Trait</span>
+              <div className="chip-wrap">
+                {SEED_TRAIT_TYPES.map((t) => (
+                  <button key={t} type="button" className={`range-chip${traitType === t ? " on" : ""}`} onClick={() => setTraitType(traitType === t ? "" : t)}>{t}</button>
+                ))}
+              </div>
             </label>
           </>
         )}
@@ -160,10 +182,11 @@ export default function SeedVarietiesSettingsPage() {
                   <div key={v.id} className={`settings-row${editingId === v.id ? " active" : ""}`}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span className="settings-row-title">
-                        {v.name}
-                        {v.cropType === "Maize" && (v.costPerBag != null || v.seedsPerBag != null || v.daysToMaturity != null) && (
+                        {v.brand ? `${v.brand} ` : ""}{v.name}
+                        {v.cropType === "Maize" && (v.costPerBag != null || v.seedsPerBag != null || v.daysToMaturity != null || v.traitType) && (
                           <span className="ds-note" style={{ display: "block", fontWeight: 400 }}>
-                            {v.costPerBag != null ? `R${v.costPerBag}/bag` : ""}
+                            {v.traitType ? `${v.traitType}` : ""}
+                            {v.costPerBag != null ? `${v.traitType ? " — " : ""}R${v.costPerBag}/bag` : ""}
                             {v.seedsPerBag != null ? ` — ${v.seedsPerBag.toLocaleString()} seeds/bag` : ""}
                             {v.daysToMaturity != null ? ` — ${v.daysToMaturity}d maturity` : ""}
                           </span>

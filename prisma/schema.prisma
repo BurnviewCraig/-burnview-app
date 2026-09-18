@@ -315,6 +315,7 @@ model SeedVariety {
   id        String   @id @default(cuid())
   cropType  String // "Rye grass" | "Maize" | ...
   name      String
+  brand     String? // e.g. "Pannar", "Pioneer"
   createdAt DateTime @default(now())
 
   // Maize-specific, all optional — used to auto-fill a field's estimated
@@ -325,6 +326,9 @@ model SeedVariety {
   costPerBag     Float?
   seedsPerBag    Int? // e.g. 60000 or 80000
   daysToMaturity Int?
+  traitType      String? // "Base" | "Roundup Ready" | "BT" | "Roundup Ready and BT"
+
+  plantingPlans MaizePlantingPlan[]
 
   @@unique([cropType, name])
 }
@@ -633,16 +637,25 @@ model MaizePlantingPlan {
   id            String   @id @default(cuid())
   farmId        String
   paddockId     String
+  varietyId     String?
+  phase         String? // free-text batch label, e.g. "Phase 1" — just for grouping/subtotals
   season        String // e.g. "2026/27"
   plannedAreaHa Float?
-  variety       String?
+  population    Float? // seeds/ha planned — cost/ha and bags-needed are worked out from this
   notes         String?
   sortOrder     Int      @default(0)
+  // Stays fully editable — cost/ha and bags-needed are computed live from
+  // the variety's current pricing — until seed is actually ordered, at
+  // which point it's locked (no snapshot needed: once ordered, editing a
+  // seed variety's price in Settings is a new-season thing, not a
+  // correction to what was already bought).
+  ordered Boolean @default(false)
 
   createdById String?
   createdAt   DateTime @default(now())
 
-  farm      Farm    @relation(fields: [farmId], references: [id], onDelete: Cascade)
-  paddock   Paddock @relation(fields: [paddockId], references: [id], onDelete: Cascade)
-  createdBy User?   @relation(fields: [createdById], references: [id])
+  farm      Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  paddock   Paddock      @relation(fields: [paddockId], references: [id], onDelete: Cascade)
+  variety   SeedVariety? @relation(fields: [varietyId], references: [id])
+  createdBy User?        @relation(fields: [createdById], references: [id])
 }

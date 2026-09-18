@@ -6,13 +6,15 @@ export const dynamic = "force-dynamic";
 
 // No farmId filter by default — planting jumps around between farms, so
 // this is one global, farm-agnostic list ordered by sortOrder (the order
-// the user actually plans to plant in), not grouped per farm.
+// the user actually plans to plant in), not grouped per farm. Variety is
+// included so cost/ha, maturity length and bags-needed can be worked out
+// client-side from its current pricing.
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const farmId = searchParams.get("farmId");
   const entries = await prisma.maizePlantingPlan.findMany({
     where: farmId ? { farmId } : undefined,
-    include: { paddock: { select: { code: true } }, farm: { select: { name: true } } },
+    include: { paddock: { select: { code: true } }, farm: { select: { name: true } }, variety: true },
     orderBy: { sortOrder: "asc" },
   });
   return NextResponse.json({
@@ -22,8 +24,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { paddockId, season, plannedAreaHa, variety, notes } = body as {
-    paddockId?: string; season?: string; plannedAreaHa?: number | null; variety?: string | null; notes?: string | null;
+  const { paddockId, varietyId, phase, season, plannedAreaHa, population, notes } = body as {
+    paddockId?: string; varietyId?: string | null; phase?: string | null; season?: string;
+    plannedAreaHa?: number | null; population?: number | null; notes?: string | null;
   };
   if (!paddockId || !season?.trim()) {
     return NextResponse.json({ error: "paddockId and season are required" }, { status: 400 });
@@ -37,9 +40,11 @@ export async function POST(req: Request) {
     data: {
       farmId: paddock.farmId,
       paddockId,
+      varietyId: varietyId || null,
+      phase: phase?.trim() || null,
       season: season.trim(),
       plannedAreaHa: plannedAreaHa ?? null,
-      variety: variety?.trim() || null,
+      population: population ?? null,
       notes: notes?.trim() || null,
       sortOrder: (last?.sortOrder ?? -1) + 1,
       createdById: userId,

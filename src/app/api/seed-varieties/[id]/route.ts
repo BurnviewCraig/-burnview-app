@@ -8,10 +8,12 @@ import { prisma } from "@/lib/prisma";
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const data: { costPerBag?: number | null; seedsPerBag?: number | null; daysToMaturity?: number | null } = {};
+  const data: { brand?: string | null; costPerBag?: number | null; seedsPerBag?: number | null; daysToMaturity?: number | null; traitType?: string | null } = {};
+  if ("brand" in body) data.brand = body.brand?.trim() || null;
   if ("costPerBag" in body) data.costPerBag = body.costPerBag ?? null;
   if ("seedsPerBag" in body) data.seedsPerBag = body.seedsPerBag ?? null;
   if ("daysToMaturity" in body) data.daysToMaturity = body.daysToMaturity ?? null;
+  if ("traitType" in body) data.traitType = body.traitType || null;
 
   const variety = await prisma.seedVariety.update({ where: { id }, data });
   return NextResponse.json({ variety });

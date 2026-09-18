@@ -15,8 +15,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { cropType, name, costPerBag, seedsPerBag, daysToMaturity } = body as {
-    cropType: string; name: string; costPerBag?: number | null; seedsPerBag?: number | null; daysToMaturity?: number | null;
+  const { cropType, name, brand, costPerBag, seedsPerBag, daysToMaturity, traitType } = body as {
+    cropType: string; name: string; brand?: string | null; costPerBag?: number | null; seedsPerBag?: number | null; daysToMaturity?: number | null; traitType?: string | null;
   };
   if (!cropType?.trim() || !name?.trim()) {
     return NextResponse.json({ error: "Crop and name are required" }, { status: 400 });
@@ -26,9 +26,11 @@ export async function POST(req: Request) {
       data: {
         cropType: cropType.trim(),
         name: name.trim(),
+        brand: brand?.trim() || null,
         costPerBag: costPerBag ?? null,
         seedsPerBag: seedsPerBag ?? null,
         daysToMaturity: daysToMaturity ?? null,
+        traitType: traitType || null,
       },
     });
     return NextResponse.json({ variety });
