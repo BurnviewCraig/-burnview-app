@@ -30,6 +30,7 @@ export type FieldActivity = {
   depth: number | null;
   mix: { crop: string; variety: string | null; rate: number; unit: string }[] | null;
   chemicals: { name: string; rate: number; unit: string }[] | null;
+  sprayPurpose: string | null;
   bales: number | null;
   createdAt: string;
 };
@@ -112,6 +113,9 @@ export type SeedVariety = {
   id: string;
   cropType: string;
   name: string;
+  costPerBag: number | null;
+  seedsPerBag: number | null;
+  daysToMaturity: number | null;
 };
 
 export type CattleGroup = {
@@ -284,6 +288,8 @@ export type MaizeFieldSeason = {
   cutDate: string | null;
   population: number | null;
   yieldTonPerHa: number | null;
+  burndownDate: string | null;
+  preGerminationSprayDate: string | null;
   firstPostSprayDate: string | null;
   lastTractorEntryDate: string | null;
   firstTopDressingDate: string | null;

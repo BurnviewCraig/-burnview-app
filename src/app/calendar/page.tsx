@@ -63,6 +63,7 @@ export default function CalendarPage() {
         depth: a.depth,
         mix: a.mix,
         chemicals: a.chemicals,
+        sprayPurpose: a.sprayPurpose,
         bales: a.bales,
       });
       setEditingPaddock({ code: a.paddock.code, sizeHa: a.paddock.sizeHa });

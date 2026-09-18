@@ -97,6 +97,11 @@ export const CROP_UNITS: Record<string, string> = {
   "White clover": "kg/ha",
 };
 
+// Optional tag on a Spraying entry — feeds MaizeFieldSeason's auto-populate
+// (see /api/field-activities) when it's relevant to a maize field. Not
+// every spray fits one of these, so it's never required.
+export const SPRAY_PURPOSES = ["Burndown", "Pre-Germination Spray", "1st Post Spray", "Last tractor entry spray"];
+
 // Map fill colors on the farm map — John Deere green/black base, crop colors
 // per Craig's own naming: rye = green, maize = orange, kikuyu = brown, high
 // velt (natural grassland) = yellow. Unplanted/unclassified fall back to a

@@ -10,14 +10,25 @@ import { maizeSeasonFor } from "@/lib/maizeSeason";
 // which fields come from where. Only ever touches a paddock that's
 // already got a maize season on file (planting creates that first), so
 // this is a no-op for every other crop.
+// Maps the Spraying form's optional purpose chip to the MaizeFieldSeason
+// date field it fills — explicit, rather than guessing from date order, so
+// it's only ever as accurate as what was actually tagged.
+const SPRAY_PURPOSE_FIELD: Record<string, "burndownDate" | "preGerminationSprayDate" | "firstPostSprayDate" | "lastTractorEntryDate"> = {
+  "Burndown": "burndownDate",
+  "Pre-Germination Spray": "preGerminationSprayDate",
+  "1st Post Spray": "firstPostSprayDate",
+  "Last tractor entry spray": "lastTractorEntryDate",
+};
+
 async function autoPopulateMaize(
   tx: Prisma.TransactionClient,
-  { farmId, paddockId, type, date, mix }: {
+  { farmId, paddockId, type, date, mix, sprayPurpose }: {
     farmId: string;
     paddockId: string;
     type: string;
     date: string;
     mix?: { crop: string; variety: string | null; rate: number; unit: string }[];
+    sprayPurpose?: string | null;
   }
 ) {
   const activityDate = new Date(date);
@@ -26,10 +37,32 @@ async function autoPopulateMaize(
     const maizeRow = mix?.find((m) => m.crop === "Maize" && Number(m.rate) > 0);
     if (!maizeRow) return;
     const season = maizeSeasonFor(activityDate);
+    const population = Number(maizeRow.rate);
+
+    // Look up the variety's own maturity length and per-bag pricing so
+    // planting can fill in an estimate and lock in what this seed actually
+    // cost — snapshotted here, not looked up live later, so a subsequent
+    // price change in Settings never rewrites an already-planted field.
+    const variety = maizeRow.variety
+      ? await tx.seedVariety.findFirst({ where: { cropType: "Maize", name: maizeRow.variety } })
+      : null;
+    const estMaturityDate = variety?.daysToMaturity
+      ? new Date(activityDate.getTime() + variety.daysToMaturity * 86400000)
+      : undefined;
+    const seedCostPerHa =
+      variety?.costPerBag && variety.seedsPerBag ? (population / variety.seedsPerBag) * variety.costPerBag : undefined;
+
+    const data = {
+      variety: maizeRow.variety || null,
+      plantDate: activityDate,
+      population,
+      ...(estMaturityDate ? { estMaturityDate } : {}),
+      ...(seedCostPerHa != null ? { seedCostPerHa: Math.round(seedCostPerHa * 100) / 100 } : {}),
+    };
     await tx.maizeFieldSeason.upsert({
       where: { paddockId_season: { paddockId, season } },
-      update: { variety: maizeRow.variety || null, plantDate: activityDate, population: Number(maizeRow.rate) },
-      create: { farmId, paddockId, season, variety: maizeRow.variety || null, plantDate: activityDate, population: Number(maizeRow.rate) },
+      update: data,
+      create: { farmId, paddockId, season, ...data },
     });
     return;
   }
@@ -43,10 +76,8 @@ async function autoPopulateMaize(
   if (!current) return;
 
   if (type === "SPRAYING") {
-    const data: { firstPostSprayDate?: Date; lastTractorEntryDate?: Date } = {};
-    if (!current.firstPostSprayDate || activityDate < current.firstPostSprayDate) data.firstPostSprayDate = activityDate;
-    if (!current.lastTractorEntryDate || activityDate > current.lastTractorEntryDate) data.lastTractorEntryDate = activityDate;
-    if (Object.keys(data).length) await tx.maizeFieldSeason.update({ where: { id: current.id }, data });
+    const field = sprayPurpose ? SPRAY_PURPOSE_FIELD[sprayPurpose] : null;
+    if (field) await tx.maizeFieldSeason.update({ where: { id: current.id }, data: { [field]: activityDate } });
   } else if (current.plantDate && activityDate > current.plantDate) {
     // Fertilizer applied after planting is assumed to be top-dressing — a
     // basal application at/before planting doesn't count as either date.
@@ -89,6 +120,7 @@ export async function POST(req: Request) {
     depth,
     mix,
     chemicals,
+    sprayPurpose,
     bales,
   }: {
     farmId: string;
@@ -102,6 +134,7 @@ export async function POST(req: Request) {
     depth?: number;
     mix?: { crop: string; variety: string | null; rate: number; unit: string }[];
     chemicals?: { name: string; rate: number; unit: string }[];
+    sprayPurpose?: string | null;
     bales?: number;
   } = body;
 
@@ -148,13 +181,14 @@ export async function POST(req: Request) {
           depth: type === "LAND_PREP" ? depth ?? null : null,
           mix: type === "PLANTING" ? mix : undefined,
           chemicals: type === "SPRAYING" ? chemicals : undefined,
+          sprayPurpose: type === "SPRAYING" ? sprayPurpose || null : null,
           bales: type === "BAILING" ? bales ?? null : null,
           createdById: userId,
         },
       });
       entries.push(entry);
 
-      await autoPopulateMaize(tx, { farmId, paddockId, type, date, mix });
+      await autoPopulateMaize(tx, { farmId, paddockId, type, date, mix, sprayPurpose });
 
       if (isTillage) {
         await tx.paddock.update({ where: { id: paddockId }, data: { landType: "Unplanted" } });

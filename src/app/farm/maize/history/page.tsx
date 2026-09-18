@@ -14,7 +14,7 @@ const COLUMN_STORAGE_KEY = "maize-history-column-order";
 
 type ColumnKey =
   | "season" | "variety" | "varietyLength" | "plantDate" | "estMaturityDate" | "cutDate"
-  | "population" | "yieldTonPerHa" | "firstPostSprayDate" | "lastTractorEntryDate"
+  | "population" | "yieldTonPerHa" | "burndownDate" | "preGerminationSprayDate" | "firstPostSprayDate" | "lastTractorEntryDate"
   | "firstTopDressingDate" | "secondTopDressingDate" | "silagePit" | "seedCostPerHa" | "notes";
 
 const COLUMNS: { key: ColumnKey; label: string }[] = [
@@ -26,6 +26,8 @@ const COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "cutDate", label: "Cut date" },
   { key: "population", label: "Population/ha" },
   { key: "yieldTonPerHa", label: "Yield t/ha" },
+  { key: "burndownDate", label: "Burndown" },
+  { key: "preGerminationSprayDate", label: "Pre-germination spray" },
   { key: "firstPostSprayDate", label: "1st post-spray" },
   { key: "lastTractorEntryDate", label: "Last tractor entry" },
   { key: "firstTopDressingDate", label: "1st top dress" },
@@ -34,7 +36,10 @@ const COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "seedCostPerHa", label: "Seed cost R/ha" },
   { key: "notes", label: "Notes" },
 ];
-const DATE_KEYS = new Set<ColumnKey>(["plantDate", "estMaturityDate", "cutDate", "firstPostSprayDate", "lastTractorEntryDate", "firstTopDressingDate", "secondTopDressingDate"]);
+const DATE_KEYS = new Set<ColumnKey>([
+  "plantDate", "estMaturityDate", "cutDate", "burndownDate", "preGerminationSprayDate",
+  "firstPostSprayDate", "lastTractorEntryDate", "firstTopDressingDate", "secondTopDressingDate",
+]);
 
 function cellValue(s: MaizeFieldSeason, key: ColumnKey): string {
   const v = s[key];
@@ -43,27 +48,36 @@ function cellValue(s: MaizeFieldSeason, key: ColumnKey): string {
   return String(v);
 }
 
-function useColumnOrder() {
-  const [order, setOrder] = useState<ColumnKey[]>(COLUMNS.map((c) => c.key));
+// Shared drag-to-reorder logic for both the column headers and the field
+// rows below — order is remembered per browser (per farm too, for rows,
+// since each farm has a different field list).
+function useDragOrder<T extends string>(storageKey: string, allKeys: T[]) {
+  const [order, setOrder] = useState<T[]>(allKeys);
+  const keysSignature = allKeys.join(",");
   useEffect(() => {
+    let next = allKeys;
     try {
-      const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
-        const parsed: ColumnKey[] = JSON.parse(saved);
-        const valid = parsed.filter((k) => COLUMNS.some((c) => c.key === k));
-        if (valid.length === COLUMNS.length) setOrder(valid);
+        const parsed: T[] = JSON.parse(saved);
+        const validSet = new Set(allKeys);
+        const valid = parsed.filter((k) => validSet.has(k));
+        const missing = allKeys.filter((k) => !valid.includes(k));
+        if (valid.length) next = [...valid, ...missing];
       }
     } catch {
       // ignore — falls back to default order
     }
-  }, []);
-  const reorder = (dragKey: ColumnKey, dropKey: ColumnKey) => {
+    setOrder(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, keysSignature]);
+  const reorder = (dragKey: T, dropKey: T) => {
     if (dragKey === dropKey) return;
     setOrder((prev) => {
       const next = prev.filter((k) => k !== dragKey);
       const dropIndex = next.indexOf(dropKey);
       next.splice(dropIndex, 0, dragKey);
-      try { localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
   };
@@ -72,7 +86,7 @@ function useColumnOrder() {
 
 const emptyForm = {
   season: "", variety: "", varietyLength: "", plantDate: "", estMaturityDate: "", cutDate: "",
-  population: "", yieldTonPerHa: "", firstPostSprayDate: "", lastTractorEntryDate: "",
+  population: "", yieldTonPerHa: "", burndownDate: "", preGerminationSprayDate: "", firstPostSprayDate: "", lastTractorEntryDate: "",
   firstTopDressingDate: "", secondTopDressingDate: "", silagePit: "", seedCostPerHa: "", notes: "",
 };
 type FormState = typeof emptyForm;
@@ -122,6 +136,7 @@ function FieldDetailSheet({
       season: s.season, variety: s.variety ?? "", varietyLength: s.varietyLength ?? "",
       plantDate: s.plantDate?.slice(0, 10) ?? "", estMaturityDate: s.estMaturityDate?.slice(0, 10) ?? "", cutDate: s.cutDate?.slice(0, 10) ?? "",
       population: s.population != null ? String(s.population) : "", yieldTonPerHa: s.yieldTonPerHa != null ? String(s.yieldTonPerHa) : "",
+      burndownDate: s.burndownDate?.slice(0, 10) ?? "", preGerminationSprayDate: s.preGerminationSprayDate?.slice(0, 10) ?? "",
       firstPostSprayDate: s.firstPostSprayDate?.slice(0, 10) ?? "", lastTractorEntryDate: s.lastTractorEntryDate?.slice(0, 10) ?? "",
       firstTopDressingDate: s.firstTopDressingDate?.slice(0, 10) ?? "", secondTopDressingDate: s.secondTopDressingDate?.slice(0, 10) ?? "",
       silagePit: s.silagePit ?? "", seedCostPerHa: s.seedCostPerHa != null ? String(s.seedCostPerHa) : "", notes: s.notes ?? "",
@@ -137,6 +152,7 @@ function FieldDetailSheet({
       plantDate: form.plantDate || null, estMaturityDate: form.estMaturityDate || null, cutDate: form.cutDate || null,
       population: form.population !== "" ? Number(form.population) : null,
       yieldTonPerHa: form.yieldTonPerHa !== "" ? Number(form.yieldTonPerHa) : null,
+      burndownDate: form.burndownDate || null, preGerminationSprayDate: form.preGerminationSprayDate || null,
       firstPostSprayDate: form.firstPostSprayDate || null, lastTractorEntryDate: form.lastTractorEntryDate || null,
       firstTopDressingDate: form.firstTopDressingDate || null, secondTopDressingDate: form.secondTopDressingDate || null,
       silagePit: form.silagePit || null, seedCostPerHa: form.seedCostPerHa !== "" ? Number(form.seedCostPerHa) : null,
@@ -188,6 +204,10 @@ function FieldDetailSheet({
             {numField("Seed cost (R/ha)", form.seedCostPerHa, set("seedCostPerHa"))}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {dateField("Burndown date", form.burndownDate, set("burndownDate"))}
+            {dateField("Pre-germination spray date", form.preGerminationSprayDate, set("preGerminationSprayDate"))}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {dateField("First post-spray date", form.firstPostSprayDate, set("firstPostSprayDate"))}
             {dateField("Last tractor entry date", form.lastTractorEntryDate, set("lastTractorEntryDate"))}
           </div>
@@ -235,14 +255,15 @@ export default function MaizeHistoryPage() {
   const farm = farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0];
   const [selected, setSelected] = useState<{ id: string; code: string } | null>(null);
   const [dragKey, setDragKey] = useState<ColumnKey | null>(null);
-  const { order, reorder } = useColumnOrder();
+  const [dragRowId, setDragRowId] = useState<string | null>(null);
+  const { order, reorder } = useDragOrder(COLUMN_STORAGE_KEY, COLUMNS.map((c) => c.key));
 
   const { data: seasonsData, refetch } = useApi<{ entries: MaizeFieldSeason[] }>(farm ? `/api/maize-field-seasons?farmId=${farm.id}` : null);
 
   // A field belongs here if it's currently classified Maize, or has any
   // season history at all (so a field rotated out of maize doesn't lose
   // its past records from view). One row per field, showing its latest season.
-  const rows = useMemo(() => {
+  const unorderedRows = useMemo(() => {
     if (!farm) return [];
     const byId = new Map<string, { id: string; code: string; latest: MaizeFieldSeason | null }>();
     farm.paddocks.filter((p) => p.landType === "Maize").forEach((p) => byId.set(p.id, { id: p.id, code: p.code, latest: null }));
@@ -253,6 +274,13 @@ export default function MaizeHistoryPage() {
     });
     return [...byId.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
   }, [farm, seasonsData]);
+
+  const { order: rowOrder, reorder: reorderRows } = useDragOrder(
+    farm ? `maize-history-row-order-${farm.id}` : "maize-history-row-order-none",
+    unorderedRows.map((r) => r.id)
+  );
+  const rowById = useMemo(() => new Map(unorderedRows.map((r) => [r.id, r])), [unorderedRows]);
+  const rows = rowOrder.map((id) => rowById.get(id)).filter((r): r is NonNullable<typeof r> => !!r);
 
   if (loading) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><Spinner /></div>;
   if (!farm) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><div className="empty">No farms found.</div></div>;
@@ -270,7 +298,7 @@ export default function MaizeHistoryPage() {
         <p className="ds-note" style={{ padding: "12px 18px" }}>No maize fields classified on {farm.name} yet — classify a field as Maize in Edit fields first.</p>
       ) : (
         <>
-          <p className="field-hint" style={{ padding: "10px 18px 0" }}>Drag a column heading to reorder it. Tap a row to see or edit that field&apos;s full history.</p>
+          <p className="field-hint" style={{ padding: "10px 18px 0" }}>Drag a column heading or a field&apos;s row to reorder it. Tap a row to see or edit that field&apos;s full history.</p>
           <div className="maize-sheet-scroll">
             <table className="maize-sheet-table">
               <thead>
@@ -296,7 +324,16 @@ export default function MaizeHistoryPage() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.id} onClick={() => setSelected({ id: r.id, code: r.code })}>
+                  <tr
+                    key={r.id}
+                    className={dragRowId === r.id ? "dragging" : ""}
+                    draggable
+                    onDragStart={() => setDragRowId(r.id)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => { if (dragRowId) reorderRows(dragRowId, r.id); setDragRowId(null); }}
+                    onDragEnd={() => setDragRowId(null)}
+                    onClick={() => setSelected({ id: r.id, code: r.code })}
+                  >
                     <td className="maize-sheet-sticky"><strong>{r.code}</strong></td>
                     {order.map((key) => (
                       <td key={key}>{r.latest ? cellValue(r.latest, key) : "—"}</td>

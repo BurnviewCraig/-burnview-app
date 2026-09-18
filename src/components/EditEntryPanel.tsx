@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { X, Trash2 } from "lucide-react";
 import { useApi } from "@/lib/useApi";
 import { sanitizeDecimalInput } from "@/lib/utils";
-import { LAND_PREP_METHODS, BALE_TYPES, CROP_TYPES, CROP_UNITS } from "@/lib/constants";
+import { LAND_PREP_METHODS, BALE_TYPES, CROP_TYPES, CROP_UNITS, SPRAY_PURPOSES } from "@/lib/constants";
 import type { FertilizerType, ChemicalType, SeedVariety } from "@/lib/types";
 
 type MixItem = { crop: string; variety: string | null; rate: number; unit: string };
@@ -24,6 +24,7 @@ export type EditableEntry =
       depth: number | null;
       mix: MixItem[] | null;
       chemicals: ChemItem[] | null;
+      sprayPurpose: string | null;
       bales: number | null;
     }
   | { kind: "walk"; id: string; date: string; cover: number };
@@ -63,6 +64,7 @@ export function EditEntryPanel({
   const [method, setMethod] = useState(isWalk ? "" : entry.method ?? "");
   const [depth, setDepth] = useState(isWalk ? "" : entry.depth != null ? String(entry.depth) : "");
   const [bales, setBales] = useState(isWalk ? "" : entry.bales != null ? String(entry.bales) : "");
+  const [sprayPurpose, setSprayPurpose] = useState(isWalk ? "" : entry.sprayPurpose ?? "");
   const [cover, setCover] = useState(isWalk ? String(entry.cover) : "");
   const [mixRows, setMixRows] = useState<MixRow[]>(
     !isWalk && entry.mix?.length
@@ -134,6 +136,7 @@ export function EditEntryPanel({
         depth: type === "LAND_PREP" && depth ? Number(depth) : undefined,
         mix: mixPayload,
         chemicals: chemicalsPayload,
+        sprayPurpose: type === "SPRAYING" ? sprayPurpose || null : undefined,
         bales: type === "BAILING" ? Number(bales) : undefined,
       }),
     });
@@ -250,6 +253,24 @@ export function EditEntryPanel({
                       );
                     })}
                     <button type="button" className="link-btn" onClick={addMixRow}>+ Add crop</button>
+                  </div>
+                </div>
+              )}
+
+              {type === "SPRAYING" && (
+                <div className="field">
+                  <span className="field-label">Purpose (optional — for maize field tracking)</span>
+                  <div className="chip-wrap">
+                    {SPRAY_PURPOSES.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`paddock-chip fert-chip${sprayPurpose === p ? " on" : ""}`}
+                        onClick={() => setSprayPurpose(sprayPurpose === p ? "" : p)}
+                      >
+                        {p}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

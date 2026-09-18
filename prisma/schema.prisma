@@ -245,6 +245,11 @@ model FieldActivity {
 
   // Spraying — [{ "name": "Roundup", "rate": 2.5, "unit": "L/ha" }, ...]
   chemicals Json?
+  // Spraying, optional — "Burndown" | "Pre-Germination Spray" | "1st Post
+  // Spray" | "Last tractor entry spray". Not every spray fits one of these
+  // (or matters for maize tracking at all), so it's left blank rather than
+  // forced — see autoPopulateMaize in /api/field-activities.
+  sprayPurpose String?
 
   // Bailing — product holds the bale type (e.g. "Rye Grass Rapped Bales");
   // bales is the total count for this paddock, bales/ha computed on read.
@@ -309,6 +314,15 @@ model SeedVariety {
   cropType  String // "Rye grass" | "Maize" | ...
   name      String
   createdAt DateTime @default(now())
+
+  // Maize-specific, all optional — used to auto-fill a field's estimated
+  // maturity date and seed cost/ha when this variety is planted. Editing
+  // these later only affects future plantings: the cost gets snapshotted
+  // onto MaizeFieldSeason.seedCostPerHa at planting time, not looked up
+  // live, so a price change never rewrites what was already bought.
+  costPerBag     Float?
+  seedsPerBag    Int? // e.g. 60000 or 80000
+  daysToMaturity Int?
 
   @@unique([cropType, name])
 }
@@ -588,6 +602,8 @@ model MaizeFieldSeason {
   population      Float? // seeds/plants per ha
   yieldTonPerHa   Float?
 
+  burndownDate          DateTime? @db.Date
+  preGerminationSprayDate DateTime? @db.Date
   firstPostSprayDate    DateTime? @db.Date
   lastTractorEntryDate  DateTime? @db.Date
   firstTopDressingDate  DateTime? @db.Date

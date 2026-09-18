@@ -375,6 +375,7 @@ a:visited { color: var(--ink); }
 .maize-sheet-table th { background: var(--paper); cursor: grab; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-soft); user-select: none; }
 .maize-sheet-table th.dragging { opacity: 0.4; }
 .maize-sheet-table tbody tr { cursor: pointer; }
+.maize-sheet-table tbody tr.dragging { opacity: 0.4; }
 .maize-sheet-table tbody tr:hover td { background: var(--paper); }
 .maize-sheet-sticky { position: sticky; left: 0; background: var(--card); }
 .maize-sheet-table tbody tr:hover .maize-sheet-sticky { background: var(--paper); }

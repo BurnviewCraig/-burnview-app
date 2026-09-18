@@ -11,6 +11,7 @@ export type RawActivity = {
   depth: number | null;
   mix: { crop: string; variety: string | null; rate: number; unit: string }[] | null;
   chemicals: { name: string; rate: number; unit: string }[] | null;
+  sprayPurpose: string | null;
   bales: number | null;
   notes: string | null;
   paddock: { code: string; sizeHa: number | null };
@@ -165,7 +166,8 @@ export function activityLabel(a: RawActivity): string {
     }
     case "SPRAYING": {
       const chems = a.chemicals?.map((c) => c.name).join(", ") ?? "";
-      return `${name}${chems ? ` — ${chems}` : ""} — ${a.paddock.code}`;
+      const purpose = a.sprayPurpose ? ` (${a.sprayPurpose})` : "";
+      return `${name}${purpose}${chems ? ` — ${chems}` : ""} — ${a.paddock.code}`;
     }
     case "BAILING":
       return `${name} — ${a.product ?? ""}${a.bales ? ` × ${a.bales}` : ""} — ${a.paddock.code}`;

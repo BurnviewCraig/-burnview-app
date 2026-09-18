@@ -64,6 +64,7 @@ export default function FullFieldHistoryPage() {
           depth: a.depth,
           mix: a.mix,
           chemicals: a.chemicals,
+          sprayPurpose: a.sprayPurpose,
           bales: a.bales,
         });
       }

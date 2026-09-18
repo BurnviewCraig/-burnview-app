@@ -7,7 +7,7 @@ import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
 import { byPaddockNumber, todayStr, sanitizeDecimalInput } from "@/lib/utils";
-import { CROP_TYPES, CROP_TO_LAND_TYPE, CROP_UNITS, LAND_PREP_METHODS, BALE_TYPES, FARM_SECTIONS } from "@/lib/constants";
+import { CROP_TYPES, CROP_TO_LAND_TYPE, CROP_UNITS, LAND_PREP_METHODS, BALE_TYPES, FARM_SECTIONS, SPRAY_PURPOSES } from "@/lib/constants";
 import type { Farm, ChemicalType, FertilizerType, SeedVariety } from "@/lib/types";
 
 type ChemRow = { rowId: string; chemicalTypeId: string; rate: string };
@@ -52,6 +52,7 @@ export default function ActivityFormPage({ params }: { params: Promise<{ type: s
   const [depth, setDepth] = useState("");
   const [mixRows, setMixRows] = useState<MixRow[]>([newMixRow()]);
   const [chemRows, setChemRows] = useState<ChemRow[]>([newChemRow()]);
+  const [sprayPurpose, setSprayPurpose] = useState("");
   const [baleType, setBaleType] = useState("");
   const [baleRows, setBaleRows] = useState<BaleRow[]>([newBaleRow()]);
   const [plantFertType, setPlantFertType] = useState("");
@@ -209,6 +210,7 @@ export default function ActivityFormPage({ params }: { params: Promise<{ type: s
         depth: isLandPrep && depth ? Number(depth) : undefined,
         mix: mixPayload,
         chemicals: chemicalsPayload,
+        sprayPurpose: isSpraying ? sprayPurpose || null : undefined,
       }),
     });
     if (!res.ok) {
@@ -242,7 +244,7 @@ export default function ActivityFormPage({ params }: { params: Promise<{ type: s
     setSaving(false);
     setSaved(selected.length);
     setSelected([]);
-    if (isSpraying) setChemRows([newChemRow()]);
+    if (isSpraying) { setChemRows([newChemRow()]); setSprayPurpose(""); }
     if (isPlanting) { setPlantFertType(""); setPlantFertRate(""); setMixRows([newMixRow()]); }
   };
 
@@ -440,6 +442,24 @@ export default function ActivityFormPage({ params }: { params: Promise<{ type: s
                 </>
               )}
               <p className="field-hint">Leave blank if this was planted without fertilizer — it&apos;ll be logged as a separate Fertilizer entry.</p>
+            </div>
+          )}
+
+          {isSpraying && (
+            <div className="field">
+              <span className="field-label">Purpose (optional — for maize field tracking)</span>
+              <div className="chip-wrap">
+                {SPRAY_PURPOSES.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`paddock-chip fert-chip${sprayPurpose === p ? " on" : ""}`}
+                    onClick={() => setSprayPurpose(sprayPurpose === p ? "" : p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

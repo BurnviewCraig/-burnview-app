@@ -29,6 +29,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     depth,
     mix,
     chemicals,
+    sprayPurpose,
     bales,
   }: {
     date?: string;
@@ -39,6 +40,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     depth?: number | null;
     mix?: MixItem[];
     chemicals?: ChemItem[];
+    sprayPurpose?: string | null;
     bales?: number | null;
   } = body;
 
@@ -92,6 +94,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if ("depth" in body && existing.type === "LAND_PREP") data.depth = depth ?? null;
     if ("mix" in body && existing.type === "PLANTING") data.mix = mix;
     if ("chemicals" in body && existing.type === "SPRAYING") data.chemicals = chemicals;
+    if ("sprayPurpose" in body && existing.type === "SPRAYING") data.sprayPurpose = sprayPurpose || null;
     if ("bales" in body && existing.type === "BAILING") data.bales = bales ?? null;
     if (!existing.createdById) data.createdById = userId;
 
