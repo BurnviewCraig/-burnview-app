@@ -51,6 +51,8 @@ export type WedgePaddock = {
   hasData: boolean;
   growthPerDay: number | null;
   mulchDays: number | null;
+  grazeDays: number | null;
+  daysSinceDefoliation: number | null;
   walkDate: string | null;
   boundary: BoundaryGeometry | null;
 };

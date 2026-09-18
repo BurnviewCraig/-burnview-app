@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { X, Footprints, ChevronRight, Printer } from "lucide-react";
 import {
-  BarChart, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Cell, ReferenceLine,
+  BarChart, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Cell, ReferenceLine, LabelList,
 } from "recharts";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
@@ -14,6 +14,19 @@ import { COLORS } from "@/lib/constants";
 import type { WedgeFarm, WedgePaddock } from "@/lib/types";
 
 type Row = WedgePaddock & { trend: number };
+
+// Cover value printed just above each bar, rotated vertically so it stays
+// legible without needing extra width per paddock.
+function CoverLabel({ x, y, width, value }: { x?: string | number; y?: string | number; width?: string | number; value?: string | number }) {
+  if (value == null || x == null || y == null || width == null) return null;
+  const cx = Number(x) + Number(width) / 2;
+  const cy = Number(y) - 3;
+  return (
+    <text x={cx} y={cy} textAnchor="start" fontSize={8} fill={COLORS.inkSoft} transform={`rotate(-90 ${cx} ${cy})`}>
+      {value}
+    </text>
+  );
+}
 
 // A4 landscape usable width at 96dpi, minus default browser print margins —
 // keeps the wedge to one page wide regardless of how many paddocks there are.
@@ -34,7 +47,7 @@ function WedgeCharts({
 }) {
   return (
     <>
-      <ComposedChart width={width} height={190} data={sorted} margin={{ top: 14, right: 4, left: 0, bottom: 0 }}>
+      <ComposedChart width={width} height={230} data={sorted} margin={{ top: 50, right: 4, left: 0, bottom: 0 }}>
         <YAxis width={38} tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Cover kg DM/ha", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
         <Tooltip
           formatter={(v: number) => [v, "Cover"]}
@@ -45,6 +58,7 @@ function WedgeCharts({
           {sorted.map((p) => (
             <Cell key={p.id} fill={!p.hasData ? COLORS.flagged : COLORS.normal} opacity={selectedId === p.id ? 1 : 0.92} />
           ))}
+          <LabelList dataKey="cover" content={CoverLabel} />
         </Bar>
         <Line type="linear" dataKey="trend" stroke={COLORS.trend} strokeWidth={1.5} dot={false} isAnimationActive={false} />
       </ComposedChart>
@@ -57,7 +71,7 @@ function WedgeCharts({
             style={{ width: width / sorted.length }}
             onClick={onBarClick ? () => onBarClick(p) : undefined}
           >
-            {p.code}
+            {p.code}{p.daysSinceDefoliation != null ? `(${p.daysSinceDefoliation})` : ""}
           </div>
         ))}
       </div>
@@ -98,9 +112,12 @@ export default function FarmWedgePage() {
         const avgCover = withData.length
           ? Math.round(withData.reduce((s, p) => s + (p.cover ?? 0), 0) / withData.length)
           : null;
-        const withGrowth = rye.filter((p) => p.growthPerDay != null);
-        const avgGrowth = withGrowth.length
-          ? Math.round((withGrowth.reduce((s, p) => s + (p.growthPerDay ?? 0), 0) / withGrowth.length) * 10) / 10
+        // Area-weighted, same reasoning as the API's farm-wide figure — a
+        // bigger paddock represents more of the farm's actual DM growth.
+        const withGrowth = rye.filter((p) => p.growthPerDay != null && p.sizeHa);
+        const growthArea = withGrowth.reduce((s, p) => s + (p.sizeHa ?? 0), 0);
+        const avgGrowth = growthArea
+          ? Math.round((withGrowth.reduce((s, p) => s + (p.growthPerDay ?? 0) * (p.sizeHa ?? 0), 0) / growthArea) * 10) / 10
           : null;
         return { farm: f, stats: { paddockCount: rye.length, noDataCount: rye.length - withData.length, avgCover, avgGrowth } };
       }),
