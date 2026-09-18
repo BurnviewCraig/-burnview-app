@@ -16,9 +16,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const data: { sizeHa?: number | null; landType?: string | null; code?: string } = {};
+  const data: { sizeHa?: number | null; landType?: string | null; code?: string; maizeSortOrder?: number | null } = {};
   if ("sizeHa" in body) data.sizeHa = body.sizeHa === null ? null : Number(body.sizeHa);
   if ("landType" in body) data.landType = body.landType;
+  if ("maizeSortOrder" in body) data.maizeSortOrder = body.maizeSortOrder === null ? null : Number(body.maizeSortOrder);
   if ("code" in body) {
     const code = String(body.code).trim();
     if (!code) return NextResponse.json({ error: "Code can't be empty" }, { status: 400 });

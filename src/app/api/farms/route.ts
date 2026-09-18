@@ -8,7 +8,7 @@ export async function GET() {
     orderBy: { sortOrder: "asc" },
     include: {
       paddocks: {
-        select: { id: true, code: true, sizeHa: true, landType: true, boundary: true },
+        select: { id: true, code: true, sizeHa: true, landType: true, boundary: true, maizeSortOrder: true },
       },
     },
   });

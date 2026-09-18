@@ -48,36 +48,29 @@ function cellValue(s: MaizeFieldSeason, key: ColumnKey): string {
   return String(v);
 }
 
-// Shared drag-to-reorder logic for both the column headers and the field
-// rows below — order is remembered per browser (per farm too, for rows,
-// since each farm has a different field list).
-function useDragOrder<T extends string>(storageKey: string, allKeys: T[]) {
-  const [order, setOrder] = useState<T[]>(allKeys);
-  const keysSignature = allKeys.join(",");
+// Column order is just a personal display preference, so it stays a
+// per-browser thing via localStorage.
+function useColumnOrder() {
+  const [order, setOrder] = useState<ColumnKey[]>(COLUMNS.map((c) => c.key));
   useEffect(() => {
-    let next = allKeys;
     try {
-      const saved = localStorage.getItem(storageKey);
+      const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
       if (saved) {
-        const parsed: T[] = JSON.parse(saved);
-        const validSet = new Set(allKeys);
-        const valid = parsed.filter((k) => validSet.has(k));
-        const missing = allKeys.filter((k) => !valid.includes(k));
-        if (valid.length) next = [...valid, ...missing];
+        const parsed: ColumnKey[] = JSON.parse(saved);
+        const valid = parsed.filter((k) => COLUMNS.some((c) => c.key === k));
+        if (valid.length === COLUMNS.length) setOrder(valid);
       }
     } catch {
       // ignore — falls back to default order
     }
-    setOrder(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey, keysSignature]);
-  const reorder = (dragKey: T, dropKey: T) => {
+  }, []);
+  const reorder = (dragKey: ColumnKey, dropKey: ColumnKey) => {
     if (dragKey === dropKey) return;
     setOrder((prev) => {
       const next = prev.filter((k) => k !== dragKey);
       const dropIndex = next.indexOf(dropKey);
       next.splice(dropIndex, 0, dragKey);
-      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* ignore */ }
+      try { localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
   };
@@ -116,10 +109,22 @@ function numField(label: string, value: string, onChange: (v: string) => void, p
   );
 }
 
+function seasonToForm(s: MaizeFieldSeason): FormState {
+  return {
+    season: s.season, variety: s.variety ?? "", varietyLength: s.varietyLength ?? "",
+    plantDate: s.plantDate?.slice(0, 10) ?? "", estMaturityDate: s.estMaturityDate?.slice(0, 10) ?? "", cutDate: s.cutDate?.slice(0, 10) ?? "",
+    population: s.population != null ? String(s.population) : "", yieldTonPerHa: s.yieldTonPerHa != null ? String(s.yieldTonPerHa) : "",
+    burndownDate: s.burndownDate?.slice(0, 10) ?? "", preGerminationSprayDate: s.preGerminationSprayDate?.slice(0, 10) ?? "",
+    firstPostSprayDate: s.firstPostSprayDate?.slice(0, 10) ?? "", lastTractorEntryDate: s.lastTractorEntryDate?.slice(0, 10) ?? "",
+    firstTopDressingDate: s.firstTopDressingDate?.slice(0, 10) ?? "", secondTopDressingDate: s.secondTopDressingDate?.slice(0, 10) ?? "",
+    silagePit: s.silagePit ?? "", seedCostPerHa: s.seedCostPerHa != null ? String(s.seedCostPerHa) : "", notes: s.notes ?? "",
+  };
+}
+
 function FieldDetailSheet({
-  farmId, paddockId, paddockCode, onClose, onSaved,
+  farmId, paddockId, paddockCode, initialSeasonId, onClose, onSaved,
 }: {
-  farmId: string; paddockId: string; paddockCode: string; onClose: () => void; onSaved: () => void;
+  farmId: string; paddockId: string; paddockCode: string; initialSeasonId: string | null; onClose: () => void; onSaved: () => void;
 }) {
   const { data, refetch } = useApi<{ entries: MaizeFieldSeason[] }>(`/api/maize-field-seasons?paddockId=${paddockId}`);
   const seasons = data?.entries ?? [];
@@ -127,21 +132,22 @@ function FieldDetailSheet({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ ...emptyForm, season: maizeSeasonFor(todayStr()) });
   const [saving, setSaving] = useState(false);
+  const [loadedInitial, setLoadedInitial] = useState(false);
   const set = <K extends keyof FormState>(key: K) => (v: string) => setForm((f) => ({ ...f, [key]: v }));
 
+  // Jump straight to editing whichever row was clicked in the main table.
+  useEffect(() => {
+    if (loadedInitial || !data) return;
+    setLoadedInitial(true);
+    if (initialSeasonId) {
+      const s = seasons.find((x) => x.id === initialSeasonId);
+      if (s) { setEditingId(s.id); setForm(seasonToForm(s)); }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
   const resetForm = () => { setEditingId(null); setForm({ ...emptyForm, season: maizeSeasonFor(todayStr()) }); };
-  const startEdit = (s: MaizeFieldSeason) => {
-    setEditingId(s.id);
-    setForm({
-      season: s.season, variety: s.variety ?? "", varietyLength: s.varietyLength ?? "",
-      plantDate: s.plantDate?.slice(0, 10) ?? "", estMaturityDate: s.estMaturityDate?.slice(0, 10) ?? "", cutDate: s.cutDate?.slice(0, 10) ?? "",
-      population: s.population != null ? String(s.population) : "", yieldTonPerHa: s.yieldTonPerHa != null ? String(s.yieldTonPerHa) : "",
-      burndownDate: s.burndownDate?.slice(0, 10) ?? "", preGerminationSprayDate: s.preGerminationSprayDate?.slice(0, 10) ?? "",
-      firstPostSprayDate: s.firstPostSprayDate?.slice(0, 10) ?? "", lastTractorEntryDate: s.lastTractorEntryDate?.slice(0, 10) ?? "",
-      firstTopDressingDate: s.firstTopDressingDate?.slice(0, 10) ?? "", secondTopDressingDate: s.secondTopDressingDate?.slice(0, 10) ?? "",
-      silagePit: s.silagePit ?? "", seedCostPerHa: s.seedCostPerHa != null ? String(s.seedCostPerHa) : "", notes: s.notes ?? "",
-    });
-  };
+  const startEdit = (s: MaizeFieldSeason) => { setEditingId(s.id); setForm(seasonToForm(s)); };
 
   const save = async () => {
     if (!form.season.trim()) return;
@@ -224,12 +230,12 @@ function FieldDetailSheet({
             <button className="save-btn small" onClick={save} disabled={saving || !form.season.trim()}>
               {saving ? "Saving…" : editingId ? "Save changes" : "Add season"}
             </button>
-            {editingId && <button className="link-btn" onClick={resetForm}>Cancel</button>}
+            {editingId && <button className="link-btn" onClick={resetForm}>Cancel / add another season</button>}
           </div>
         </div>
 
         <div className="field" style={{ marginTop: 16 }}>
-          <span className="field-label">History</span>
+          <span className="field-label">All seasons on this field</span>
           {seasons.length === 0 && <p className="ds-note">No seasons logged yet for this field.</p>}
           {seasons.map((s) => (
             <div key={s.id} className={`settings-row${editingId === s.id ? " active" : ""}`}>
@@ -248,39 +254,63 @@ function FieldDetailSheet({
   );
 }
 
+type FieldRow = { id: string; code: string; maizeSortOrder: number | null; seasons: MaizeFieldSeason[] };
+
 export default function MaizeHistoryPage() {
-  const { data: farmsData, loading } = useApi<{ farms: Farm[] }>("/api/farms");
+  const { data: farmsData, loading, refetch: refetchFarms } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
   const [farmId, setFarmId] = useState<string | null>(null);
   const farm = farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0];
-  const [selected, setSelected] = useState<{ id: string; code: string } | null>(null);
+  const [selected, setSelected] = useState<{ id: string; code: string; seasonId: string | null } | null>(null);
   const [dragKey, setDragKey] = useState<ColumnKey | null>(null);
-  const [dragRowId, setDragRowId] = useState<string | null>(null);
-  const { order, reorder } = useDragOrder(COLUMN_STORAGE_KEY, COLUMNS.map((c) => c.key));
+  const [dragFieldId, setDragFieldId] = useState<string | null>(null);
+  const [orderOverride, setOrderOverride] = useState<string[] | null>(null);
+  const { order, reorder } = useColumnOrder();
 
-  const { data: seasonsData, refetch } = useApi<{ entries: MaizeFieldSeason[] }>(farm ? `/api/maize-field-seasons?farmId=${farm.id}` : null);
+  const { data: seasonsData, refetch: refetchSeasons } = useApi<{ entries: MaizeFieldSeason[] }>(farm ? `/api/maize-field-seasons?farmId=${farm.id}` : null);
+  const refetch = () => { refetchSeasons(); refetchFarms(); };
 
   // A field belongs here if it's currently classified Maize, or has any
   // season history at all (so a field rotated out of maize doesn't lose
-  // its past records from view). One row per field, showing its latest season.
-  const unorderedRows = useMemo(() => {
+  // its past records from view) — every season shows as its own row, not
+  // just the latest. Order is shared (Paddock.maizeSortOrder), not per
+  // browser, since everyone should see fields laid out the same way.
+  const fields = useMemo<FieldRow[]>(() => {
     if (!farm) return [];
-    const byId = new Map<string, { id: string; code: string; latest: MaizeFieldSeason | null }>();
-    farm.paddocks.filter((p) => p.landType === "Maize").forEach((p) => byId.set(p.id, { id: p.id, code: p.code, latest: null }));
+    const byId = new Map<string, FieldRow>();
+    farm.paddocks.filter((p) => p.landType === "Maize").forEach((p) => byId.set(p.id, { id: p.id, code: p.code, maizeSortOrder: p.maizeSortOrder, seasons: [] }));
     (seasonsData?.entries ?? []).forEach((s) => {
       const existing = byId.get(s.paddockId);
-      if (existing) { if (!existing.latest) existing.latest = s; } // entries already sorted desc by season
-      else byId.set(s.paddockId, { id: s.paddockId, code: s.paddockCode ?? s.paddockId, latest: s });
+      if (existing) existing.seasons.push(s);
+      else byId.set(s.paddockId, { id: s.paddockId, code: s.paddockCode ?? s.paddockId, maizeSortOrder: null, seasons: [s] });
     });
-    return [...byId.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
-  }, [farm, seasonsData]);
+    const defaultOrder = [...byId.values()].sort((a, b) => {
+      if (a.maizeSortOrder != null && b.maizeSortOrder != null) return a.maizeSortOrder - b.maizeSortOrder;
+      if (a.maizeSortOrder != null) return -1;
+      if (b.maizeSortOrder != null) return 1;
+      return a.code.localeCompare(b.code, undefined, { numeric: true });
+    });
+    if (orderOverride) {
+      const byFieldId = new Map(defaultOrder.map((f) => [f.id, f]));
+      const ordered = orderOverride.map((id) => byFieldId.get(id)).filter((f): f is FieldRow => !!f);
+      const missing = defaultOrder.filter((f) => !orderOverride.includes(f.id));
+      return [...ordered, ...missing];
+    }
+    return defaultOrder;
+  }, [farm, seasonsData, orderOverride]);
 
-  const { order: rowOrder, reorder: reorderRows } = useDragOrder(
-    farm ? `maize-history-row-order-${farm.id}` : "maize-history-row-order-none",
-    unorderedRows.map((r) => r.id)
-  );
-  const rowById = useMemo(() => new Map(unorderedRows.map((r) => [r.id, r])), [unorderedRows]);
-  const rows = rowOrder.map((id) => rowById.get(id)).filter((r): r is NonNullable<typeof r> => !!r);
+  const reorderFields = async (dragId: string, dropId: string) => {
+    if (dragId === dropId) return;
+    const currentIds = fields.map((f) => f.id);
+    const next = currentIds.filter((k) => k !== dragId);
+    const dropIndex = next.indexOf(dropId);
+    next.splice(dropIndex, 0, dragId);
+    setOrderOverride(next);
+    await Promise.all(next.map((id, i) => fetch(`/api/paddocks/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maizeSortOrder: i }),
+    })));
+    refetchFarms();
+  };
 
   if (loading) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><Spinner /></div>;
   if (!farm) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><div className="empty">No farms found.</div></div>;
@@ -290,15 +320,17 @@ export default function MaizeHistoryPage() {
       <Header title="Maize History" backHref="/farm/maize" />
       <div className="tabs">
         {farms.map((f) => (
-          <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => { setFarmId(f.id); setSelected(null); }}>{f.name}</button>
+          <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => { setFarmId(f.id); setSelected(null); setOrderOverride(null); }}>{f.name}</button>
         ))}
       </div>
 
-      {rows.length === 0 ? (
+      {fields.length === 0 ? (
         <p className="ds-note" style={{ padding: "12px 18px" }}>No maize fields classified on {farm.name} yet — classify a field as Maize in Edit fields first.</p>
       ) : (
         <>
-          <p className="field-hint" style={{ padding: "10px 18px 0" }}>Drag a column heading or a field&apos;s row to reorder it. Tap a row to see or edit that field&apos;s full history.</p>
+          <p className="field-hint" style={{ padding: "10px 18px 0" }}>
+            Drag a column heading, or a field&apos;s name, to reorder it — field order is shared with everyone. Tap a row to see or edit that season.
+          </p>
           <div className="maize-sheet-scroll">
             <table className="maize-sheet-table">
               <thead>
@@ -323,23 +355,43 @@ export default function MaizeHistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr
-                    key={r.id}
-                    className={dragRowId === r.id ? "dragging" : ""}
-                    draggable
-                    onDragStart={() => setDragRowId(r.id)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => { if (dragRowId) reorderRows(dragRowId, r.id); setDragRowId(null); }}
-                    onDragEnd={() => setDragRowId(null)}
-                    onClick={() => setSelected({ id: r.id, code: r.code })}
-                  >
-                    <td className="maize-sheet-sticky"><strong>{r.code}</strong></td>
-                    {order.map((key) => (
-                      <td key={key}>{r.latest ? cellValue(r.latest, key) : "—"}</td>
-                    ))}
-                  </tr>
-                ))}
+                {fields.map((field) => {
+                  const rowSpan = field.seasons.length || 1;
+                  return field.seasons.length ? (
+                    field.seasons.map((s, i) => (
+                      <tr key={s.id} onClick={() => setSelected({ id: field.id, code: field.code, seasonId: s.id })}>
+                        {i === 0 && (
+                          <td
+                            className={`maize-sheet-sticky${dragFieldId === field.id ? " dragging" : ""}`}
+                            rowSpan={rowSpan}
+                            draggable
+                            onDragStart={(e) => { e.stopPropagation(); setDragFieldId(field.id); }}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => { e.stopPropagation(); if (dragFieldId) reorderFields(dragFieldId, field.id); setDragFieldId(null); }}
+                            onDragEnd={() => setDragFieldId(null)}
+                          >
+                            <strong>{field.code}</strong>
+                          </td>
+                        )}
+                        {order.map((key) => <td key={key}>{cellValue(s, key)}</td>)}
+                      </tr>
+                    ))
+                  ) : (
+                    <tr key={field.id} onClick={() => setSelected({ id: field.id, code: field.code, seasonId: null })}>
+                      <td
+                        className={`maize-sheet-sticky${dragFieldId === field.id ? " dragging" : ""}`}
+                        draggable
+                        onDragStart={(e) => { e.stopPropagation(); setDragFieldId(field.id); }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => { e.stopPropagation(); if (dragFieldId) reorderFields(dragFieldId, field.id); setDragFieldId(null); }}
+                        onDragEnd={() => setDragFieldId(null)}
+                      >
+                        <strong>{field.code}</strong>
+                      </td>
+                      {order.map((key) => <td key={key}>—</td>)}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -351,6 +403,7 @@ export default function MaizeHistoryPage() {
           farmId={farm.id}
           paddockId={selected.id}
           paddockCode={selected.code}
+          initialSeasonId={selected.seasonId}
           onClose={() => setSelected(null)}
           onSaved={refetch}
         />

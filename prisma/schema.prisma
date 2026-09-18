@@ -61,6 +61,7 @@ model Paddock {
   sizeHa  Float?
   landType String? // "Rye grass" | "Kikuyu" | "Maize" | "Unplanted" | null (unclassified)
   boundary Json? // GeoJSON Polygon/MultiPolygon (lon/lat), imported from John Deere Operations Center
+  maizeSortOrder Int? // display order on the Maize History sheet — shared across everyone, not per-browser
 
   farm            Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
   fieldActivities FieldActivity[]
@@ -68,6 +69,7 @@ model Paddock {
   stockEntries    StockEntry[]
   grazingAllocations GrazingAllocation[]
   maizeFieldSeasons MaizeFieldSeason[]
+  maizePlantingPlans MaizePlantingPlan[]
 
   @@unique([farmId, code])
 }
@@ -624,17 +626,23 @@ model MaizeFieldSeason {
   @@unique([paddockId, season])
 }
 
+// Planting jumps around between farms rather than going farm-by-farm, so
+// these are one global list (not split/tabbed by farm) — paddockId is how
+// a plan says which specific camp, with farmId just following from it.
 model MaizePlantingPlan {
   id            String   @id @default(cuid())
   farmId        String
+  paddockId     String
   season        String // e.g. "2026/27"
   plannedAreaHa Float?
   variety       String?
   notes         String?
+  sortOrder     Int      @default(0)
 
   createdById String?
   createdAt   DateTime @default(now())
 
-  farm      Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
-  createdBy User? @relation(fields: [createdById], references: [id])
+  farm      Farm    @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  paddock   Paddock @relation(fields: [paddockId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation(fields: [createdById], references: [id])
 }

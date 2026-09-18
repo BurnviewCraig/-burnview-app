@@ -8,6 +8,7 @@ export type Paddock = {
   sizeHa: number | null;
   landType: string | null;
   boundary: BoundaryGeometry | null;
+  maizeSortOrder: number | null;
 };
 
 export type Farm = {
@@ -303,8 +304,12 @@ export type MaizeFieldSeason = {
 export type MaizePlantingPlan = {
   id: string;
   farmId: string;
+  farmName?: string;
+  paddockId: string;
+  paddockCode?: string;
   season: string;
   plannedAreaHa: number | null;
   variety: string | null;
   notes: string | null;
+  sortOrder: number;
 };
