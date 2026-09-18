@@ -56,7 +56,7 @@ function WedgeCharts({
         />
         <Bar dataKey="greenCover" stackId="cover" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined}>
           {sorted.map((p) => (
-            <Cell key={p.id} fill={!p.hasData ? COLORS.flagged : COLORS.normal} opacity={selectedId === p.id ? 1 : 0.92} />
+            <Cell key={p.id} fill={COLORS.normal} opacity={selectedId === p.id ? 1 : 0.92} />
           ))}
         </Bar>
         <Bar dataKey="blueCover" stackId="cover" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined}>
@@ -72,7 +72,7 @@ function WedgeCharts({
         {sorted.map((p) => (
           <div
             key={p.id}
-            className={`wedge-axis-label${!p.hasData ? " flagged" : ""}${selectedId === p.id ? " selected" : ""}`}
+            className={`wedge-axis-label${selectedId === p.id ? " selected" : ""}`}
             style={{ width: width / sorted.length }}
             onClick={onBarClick ? () => onBarClick(p) : undefined}
           >
@@ -142,15 +142,14 @@ export default function FarmWedgePage() {
     : null;
 
   // Sorted ascending by cover — tallest grass on the right, like the real
-  // wedge exports. No-data paddocks can't be height-sorted, so they sit at
-  // the left edge. Only Rye grass camps go on the wedge — the API returns
+  // wedge exports. A camp with no walk logged yet isn't shown at all
+  // (the "No data" count in the summary box is where that surfaces
+  // instead) — only Rye grass camps go on the wedge — the API returns
   // every paddock (the map needs the rest), so filter down to it here.
   const sorted: Row[] = useMemo(() => {
     if (!current) return [];
     const wedgePaddocks = current.paddocks.filter(isMeasuredRyeGrass);
-    const withData = wedgePaddocks.filter((p) => p.hasData).sort((a, b) => (a.cover ?? 0) - (b.cover ?? 0));
-    const noData = wedgePaddocks.filter((p) => !p.hasData);
-    const combined = [...noData, ...withData];
+    const combined = wedgePaddocks.filter((p) => p.hasData).sort((a, b) => (a.cover ?? 0) - (b.cover ?? 0));
 
     const covPoints = combined.map((p, i) => ({ x: i, y: p.cover })).filter((pt) => pt.y != null) as { x: number; y: number }[];
     const n = covPoints.length;
@@ -254,11 +253,10 @@ export default function FarmWedgePage() {
           <div className="wedge-legend">
             <div><span className="wedge-swatch" style={{ background: COLORS.normal }} />Last week&apos;s cover</div>
             <div><span className="wedge-swatch" style={{ background: COLORS.grown }} />Growth since</div>
-            <div><span className="wedge-swatch" style={{ background: COLORS.flagged }} />No data</div>
             <div><span className="wedge-swatch line" />Trend</div>
           </div>
 
-          {sorted.every((p) => !p.hasData) ? (
+          {sorted.length === 0 ? (
             <p className="ds-note">No pasture walks recorded yet for {current.name} — enter one from Data entry to see the wedge.</p>
           ) : (
             <>
