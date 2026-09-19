@@ -14,11 +14,15 @@ export function BulkEditPanel({
   type,
   onClose,
   onDone,
+  onDeleteAll,
 }: {
   targets: BulkTarget[];
   type: string; // activity type, or "WALK"
   onClose: () => void;
   onDone: () => void;
+  // Only set for a collapsed calendar group (a whole pivot/section logged
+  // together) — lets the group be scrapped entirely, not just edited.
+  onDeleteAll?: () => Promise<void>;
 }) {
   const { data: fertData } = useApi<{ types: FertilizerType[] }>("/api/fertilizer-types");
   const fertTypes = fertData?.types ?? [];
@@ -44,6 +48,16 @@ export function BulkEditPanel({
 
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAll = async () => {
+    if (!onDeleteAll) return;
+    if (!confirmingDelete) { setConfirmingDelete(true); return; }
+    setDeleting(true);
+    await onDeleteAll();
+    setDeleting(false);
+  };
 
   const anyFieldOn = dateOn || notesOn || productOn || rateOn || methodOn || depthOn || balesOn || coverOn;
 
@@ -190,6 +204,11 @@ export function BulkEditPanel({
             <button className="save-btn" onClick={handleApply} disabled={!anyFieldOn || saving}>
               {saving ? "Applying…" : `Apply to ${targets.length} entries`}
             </button>
+            {onDeleteAll && (
+              <button className={`delete-btn${confirmingDelete ? " confirm" : ""}`} onClick={handleDeleteAll} disabled={deleting}>
+                {deleting ? "Deleting…" : confirmingDelete ? "Confirm delete" : `Delete all ${targets.length} entries`}
+              </button>
+            )}
           </div>
         </div>
       </div>

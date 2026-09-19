@@ -81,6 +81,7 @@ export type FertilizerGroup = {
   product: string | null;
   rate: number | null;
   paddockCodes: string[];
+  memberIds: string[];
 };
 
 // One planting batch (same farm, same day, same seed mix) collapsed into a
@@ -94,6 +95,7 @@ export type PlantingGroup = {
   date: string;
   mix: { crop: string; variety: string | null; rate: number; unit: string }[] | null;
   paddockCodes: string[];
+  memberIds: string[];
 };
 
 export type CalendarEvent = {
@@ -233,8 +235,8 @@ export function eventsFromCalendarData(
     const date = a.date.slice(0, 10);
     const key = `${a.farmId}|${date}|${JSON.stringify(a.mix)}`;
     const existing = plantGroupMap.get(key);
-    if (existing) existing.paddockCodes.push(a.paddock.code);
-    else plantGroupMap.set(key, { farmId: a.farmId, farmName: a.farm.name, farmSlug: a.farm.slug, date, mix: a.mix, paddockCodes: [a.paddock.code] });
+    if (existing) { existing.paddockCodes.push(a.paddock.code); existing.memberIds.push(a.id); }
+    else plantGroupMap.set(key, { farmId: a.farmId, farmName: a.farm.name, farmSlug: a.farm.slug, date, mix: a.mix, paddockCodes: [a.paddock.code], memberIds: [a.id] });
   }
   const plantGroups: CalendarEvent[] = [...plantGroupMap.values()]
     .sort((a, b) => (Math.min(...a.paddockCodes.map(numPart)) - Math.min(...b.paddockCodes.map(numPart))))
@@ -252,8 +254,8 @@ export function eventsFromCalendarData(
     const date = a.date.slice(0, 10);
     const key = `${a.farmId}|${date}|${a.product ?? ""}|${a.rate ?? ""}`;
     const existing = fertGroupMap.get(key);
-    if (existing) existing.paddockCodes.push(a.paddock.code);
-    else fertGroupMap.set(key, { farmId: a.farmId, farmName: a.farm.name, farmSlug: a.farm.slug, date, product: a.product, rate: a.rate, paddockCodes: [a.paddock.code] });
+    if (existing) { existing.paddockCodes.push(a.paddock.code); existing.memberIds.push(a.id); }
+    else fertGroupMap.set(key, { farmId: a.farmId, farmName: a.farm.name, farmSlug: a.farm.slug, date, product: a.product, rate: a.rate, paddockCodes: [a.paddock.code], memberIds: [a.id] });
   }
   const fertGroups: CalendarEvent[] = [...fertGroupMap.values()]
     .sort((a, b) => (Math.min(...a.paddockCodes.map(numPart)) - Math.min(...b.paddockCodes.map(numPart))))

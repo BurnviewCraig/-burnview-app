@@ -9,7 +9,7 @@ import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { EditEntryPanel, type EditableEntry } from "@/components/EditEntryPanel";
 import { BulkEditPanel } from "@/components/BulkEditPanel";
-import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale, type MilkSaleGroup, type WalkGroup, type CalendarEvent } from "@/lib/calendarFormat";
+import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale, type MilkSaleGroup, type WalkGroup, type FertilizerGroup, type PlantingGroup, type CalendarEvent } from "@/lib/calendarFormat";
 import type { Farm } from "@/lib/types";
 
 export default function CalendarPage() {
@@ -29,6 +29,7 @@ export default function CalendarPage() {
 
   const [editingEntry, setEditingEntry] = useState<EditableEntry | null>(null);
   const [editingPaddock, setEditingPaddock] = useState<{ code: string; sizeHa: number | null } | null>(null);
+  const [groupEditTarget, setGroupEditTarget] = useState<{ type: string; memberIds: string[] } | null>(null);
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -42,13 +43,16 @@ export default function CalendarPage() {
   }, [data]);
 
   const openEdit = (e: CalendarEvent) => {
-    if (e.isGrazing || e.isFertilizerGroup || e.isPlantingGroup) return; // shown for reference here — edit/delete a single paddock's entry from the farm map
+    if (e.isGrazing) return;
     if (e.isWalkGroup) {
       const g = e.raw as WalkGroup;
       router.push(`/food/data-entry/pasture-walk?farmId=${g.farmId}&date=${g.date}`);
     } else if (e.isMilkSale) {
       const m = e.raw as MilkSaleGroup;
       router.push(`/milk-sold?farmId=${m.farmId}&date=${m.date}`);
+    } else if (e.isFertilizerGroup || e.isPlantingGroup) {
+      const g = e.raw as FertilizerGroup | PlantingGroup;
+      setGroupEditTarget({ type: e.isFertilizerGroup ? "FERTILIZER" : "PLANTING", memberIds: g.memberIds });
     } else {
       const a = e.raw as RawActivity;
       setEditingEntry({
@@ -114,8 +118,11 @@ export default function CalendarPage() {
   };
 
   const handleEventClick = (e: CalendarEvent) => {
-    if (e.isGrazing || e.isFertilizerGroup || e.isPlantingGroup) return;
-    if (e.isWalkGroup || e.isMilkSale) { if (!selectMode) openEdit(e); return; } // a whole day's sheet/farm total, not a single selectable/deletable row
+    if (e.isGrazing) return;
+    // These are collapsed summaries, not individually selectable rows —
+    // tapping one opens its own dedicated edit/delete view instead of
+    // joining the generic multi-select flow.
+    if (e.isWalkGroup || e.isMilkSale || e.isFertilizerGroup || e.isPlantingGroup) { if (!selectMode) openEdit(e); return; }
     if (selectMode) toggleSelected(e.id);
     else openEdit(e);
   };
@@ -165,7 +172,7 @@ export default function CalendarPage() {
                     {events.map((e) => {
                       const isSelected = selectedIds.has(e.id);
                       const selectable = !e.isGrazing && !e.isWalkGroup && !e.isMilkSale && !e.isFertilizerGroup && !e.isPlantingGroup;
-                      const clickable = !e.isGrazing && !e.isFertilizerGroup && !e.isPlantingGroup && !((e.isWalkGroup || e.isMilkSale) && selectMode);
+                      const clickable = !e.isGrazing && !((e.isWalkGroup || e.isMilkSale || e.isFertilizerGroup || e.isPlantingGroup) && selectMode);
                       return (
                         <div
                           key={e.id}
@@ -209,6 +216,20 @@ export default function CalendarPage() {
           type={selectedTypeKey(selectedEvents[0])}
           onClose={() => setBulkEditOpen(false)}
           onDone={() => { setBulkEditOpen(false); clearSelection(); refetch(); }}
+        />
+      )}
+
+      {groupEditTarget && (
+        <BulkEditPanel
+          targets={groupEditTarget.memberIds.map((id) => ({ id, isWalk: false }))}
+          type={groupEditTarget.type}
+          onClose={() => setGroupEditTarget(null)}
+          onDone={() => { setGroupEditTarget(null); refetch(); }}
+          onDeleteAll={async () => {
+            await Promise.all(groupEditTarget.memberIds.map((id) => fetch(`/api/field-activities/${id}`, { method: "DELETE" })));
+            setGroupEditTarget(null);
+            refetch();
+          }}
         />
       )}
 

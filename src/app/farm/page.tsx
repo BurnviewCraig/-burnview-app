@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Map as MapIcon, ClipboardList, Pencil, CloudRain, Wheat, ChevronRight } from "lucide-react";
+import { Map as MapIcon, ClipboardList, Pencil, CloudRain, Wheat, BarChart3, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
 
 export default function FarmPage() {
@@ -44,6 +44,14 @@ export default function FarmPage() {
           <div className="menu-row-text">
             <span className="mr-title">Maize</span>
             <span className="mr-sub">Per-field history &amp; planting plans</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+        <Link className="menu-row" href="/farm/reports">
+          <BarChart3 size={18} strokeWidth={1.75} />
+          <div className="menu-row-text">
+            <span className="mr-title">Generate report</span>
+            <span className="mr-sub">Fertilizer program totals &amp; averages</span>
           </div>
           <ChevronRight size={16} />
         </Link>
