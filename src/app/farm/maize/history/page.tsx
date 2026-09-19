@@ -8,6 +8,7 @@ import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
 import { todayStr, sanitizeDecimalInput } from "@/lib/utils";
 import { maizeSeasonFor } from "@/lib/maizeSeason";
+import { FARM_SECTIONS } from "@/lib/constants";
 import type { Farm, MaizeFieldSeason } from "@/lib/types";
 
 const COLUMN_STORAGE_KEY = "maize-history-column-order";
@@ -256,6 +257,49 @@ function FieldDetailSheet({
 
 type FieldRow = { id: string; code: string; maizeSortOrder: number | null; seasons: MaizeFieldSeason[] };
 
+// A pivot/section (see FARM_SECTIONS) where every one of its camps has the
+// exact same season record — same variety, dates, population etc. Detected
+// fresh from the data every render, so it only ever groups what was
+// actually planted identically; a camp planted on its own, or with
+// different seed, just falls out of the match and shows on its own row.
+type SectionMatch = { sectionName: string; season: string; fieldIds: string[]; seasonIds: string[]; representative: MaizeFieldSeason };
+
+function seasonSignature(s: MaizeFieldSeason): string {
+  return COLUMNS.map((c) => cellValue(s, c.key)).join("|");
+}
+
+function findSectionMatches(farmSlug: string, fields: FieldRow[]): SectionMatch[] {
+  const sections = FARM_SECTIONS.filter((s) => s.farmSlug === farmSlug);
+  const byCode = new Map(fields.map((f) => [f.code, f]));
+  const matches: SectionMatch[] = [];
+  for (const section of sections) {
+    const members = section.codes.map((c) => byCode.get(c));
+    if (members.some((m) => !m) || members.length === 0) continue;
+    const memberFields = members as FieldRow[];
+    const seasonCounts = new Map<string, number>();
+    memberFields.forEach((f) => {
+      new Set(f.seasons.map((s) => s.season)).forEach((season) => {
+        seasonCounts.set(season, (seasonCounts.get(season) ?? 0) + 1);
+      });
+    });
+    for (const [season, count] of seasonCounts) {
+      if (count !== memberFields.length) continue; // not every camp in the section has this season
+      const rows = memberFields.map((f) => f.seasons.find((s) => s.season === season)!);
+      const base = seasonSignature(rows[0]);
+      if (rows.every((r) => seasonSignature(r) === base)) {
+        matches.push({
+          sectionName: section.name,
+          season,
+          fieldIds: memberFields.map((f) => f.id),
+          seasonIds: rows.map((r) => r.id),
+          representative: rows[0],
+        });
+      }
+    }
+  }
+  return matches;
+}
+
 export default function MaizeHistoryPage() {
   const { data: farmsData, loading, refetch: refetchFarms } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
@@ -312,6 +356,45 @@ export default function MaizeHistoryPage() {
     refetchFarms();
   };
 
+  // Which sections currently have a full, identical match are found fresh
+  // from the data every render; "expanded" ones are ones the user chose to
+  // see broken out into individual camps anyway.
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const sectionMatches = useMemo(() => (farm ? findSectionMatches(farm.slug, fields) : []), [farm, fields]);
+  const activeMatches = useMemo(() => sectionMatches.filter((m) => !expandedSections.has(m.sectionName)), [sectionMatches, expandedSections]);
+  const toggleSectionExpanded = (name: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  };
+
+  const displayFields = useMemo<FieldRow[]>(() => {
+    if (activeMatches.length === 0) return fields;
+    const indexOf = new Map(fields.map((f, i) => [f.id, i]));
+    const consumedSeasonIds = new Set(activeMatches.flatMap((m) => m.seasonIds));
+    const consumedFieldIds = new Set(activeMatches.flatMap((m) => m.fieldIds));
+
+    const bySection = new Map<string, SectionMatch[]>();
+    activeMatches.forEach((m) => bySection.set(m.sectionName, [...(bySection.get(m.sectionName) ?? []), m]));
+    const groupRows = [...bySection.entries()].map(([name, matches]) => ({
+      row: {
+        id: `group:${name}`,
+        code: name,
+        maizeSortOrder: null,
+        seasons: [...matches].sort((a, b) => (a.season < b.season ? 1 : -1)).map((m) => m.representative),
+      } as FieldRow,
+      index: Math.min(...matches.flatMap((m) => m.fieldIds.map((id) => indexOf.get(id) ?? Infinity))),
+    }));
+
+    const remaining = fields
+      .map((f) => ({ row: { ...f, seasons: f.seasons.filter((s) => !consumedSeasonIds.has(s.id)) }, index: indexOf.get(f.id)! }))
+      .filter(({ row }) => row.seasons.length > 0 || !consumedFieldIds.has(row.id));
+
+    return [...remaining, ...groupRows].sort((a, b) => a.index - b.index).map((r) => r.row);
+  }, [fields, activeMatches]);
+
   if (loading) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><Spinner /></div>;
   if (!farm) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><div className="empty">No farms found.</div></div>;
 
@@ -320,7 +403,7 @@ export default function MaizeHistoryPage() {
       <Header title="Maize History" backHref="/farm/maize" />
       <div className="tabs">
         {farms.map((f) => (
-          <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => { setFarmId(f.id); setSelected(null); setOrderOverride(null); }}>{f.name}</button>
+          <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => { setFarmId(f.id); setSelected(null); setOrderOverride(null); setExpandedSections(new Set()); }}>{f.name}</button>
         ))}
       </div>
 
@@ -331,6 +414,19 @@ export default function MaizeHistoryPage() {
           <p className="field-hint" style={{ padding: "10px 18px 0" }}>
             Drag a column heading, or a field&apos;s name, to reorder it — field order is shared with everyone. Tap a row to see or edit that season.
           </p>
+          {sectionMatches.length > 0 && (
+            <div className="chip-wrap" style={{ padding: "0 18px 8px" }}>
+              {[...new Set(sectionMatches.map((m) => m.sectionName))].map((name) => (
+                <button
+                  key={name}
+                  className={`range-chip${expandedSections.has(name) ? "" : " on"}`}
+                  onClick={() => toggleSectionExpanded(name)}
+                >
+                  {name}{expandedSections.has(name) ? " (split out)" : " (combined)"}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="maize-sheet-scroll">
             <table className="maize-sheet-table">
               <thead>
@@ -355,22 +451,27 @@ export default function MaizeHistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {fields.map((field) => {
+                {displayFields.map((field) => {
+                  const isGroup = field.id.startsWith("group:");
                   const rowSpan = field.seasons.length || 1;
                   return field.seasons.length ? (
                     field.seasons.map((s, i) => (
-                      <tr key={s.id} onClick={() => setSelected({ id: field.id, code: field.code, seasonId: s.id })}>
+                      <tr
+                        key={s.id}
+                        onClick={() => (isGroup ? toggleSectionExpanded(field.code) : setSelected({ id: field.id, code: field.code, seasonId: s.id }))}
+                      >
                         {i === 0 && (
                           <td
                             className={`maize-sheet-sticky${dragFieldId === field.id ? " dragging" : ""}`}
                             rowSpan={rowSpan}
-                            draggable
+                            draggable={!isGroup}
                             onDragStart={(e) => { e.stopPropagation(); setDragFieldId(field.id); }}
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={(e) => { e.stopPropagation(); if (dragFieldId) reorderFields(dragFieldId, field.id); setDragFieldId(null); }}
                             onDragEnd={() => setDragFieldId(null)}
                           >
                             <strong>{field.code}</strong>
+                            {isGroup && <span className="ds-note" style={{ display: "block", fontWeight: 400 }}>all camps planted the same</span>}
                           </td>
                         )}
                         {order.map((key) => <td key={key}>{cellValue(s, key)}</td>)}

@@ -6,14 +6,14 @@ export async function POST(req: Request) {
   const body = await req.json();
   const { itemId, mode, qty, date, farmId, paddockId } = body as {
     itemId: string;
-    mode: "USE" | "RESTOCK";
+    mode: "USE" | "RESTOCK" | "COUNT";
     qty: number;
     date: string;
     farmId: string;
     paddockId?: string | null;
   };
 
-  if (!itemId || !mode || !qty || qty <= 0 || !date || !farmId) {
+  if (!itemId || !mode || qty == null || qty < 0 || (mode !== "COUNT" && qty <= 0) || !date || !farmId) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
   const result = await prisma.$transaction(async (tx) => {
     const item = await tx.stockItem.findUniqueOrThrow({ where: { id: itemId } });
-    const nextQty = mode === "USE" ? Math.max(0, item.qty - qty) : item.qty + qty;
+    const nextQty = mode === "USE" ? Math.max(0, item.qty - qty) : mode === "RESTOCK" ? item.qty + qty : qty;
     const updatedItem = await tx.stockItem.update({ where: { id: itemId }, data: { qty: nextQty } });
     const entry = await tx.stockEntry.create({
       data: {

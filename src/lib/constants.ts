@@ -247,11 +247,16 @@ function rCodes(start: number, end: number): string[] {
   for (let i = start; i <= end; i++) codes.push(`R${i}`);
   return codes;
 }
+function codeRange(prefix: string, start: number, end: number): string[] {
+  const codes: string[] = [];
+  for (let i = start; i <= end; i++) codes.push(`${prefix}${i}`);
+  return codes;
+}
 
-// Burnview's named drag-line/pivot groupings — lets fertilizer data entry
+// Named drag-line/pivot groupings — lets fertilizer/planting data entry
 // offer "select this whole section" as one click, and lets the calendar
-// collapse a section's worth of same-day, same-treatment entries down to
-// its name instead of listing every camp.
+// (and the Maize History sheet) collapse a section's worth of same-day,
+// same-treatment entries down to its name instead of listing every camp.
 export const FARM_SECTIONS: { farmSlug: string; name: string; codes: string[] }[] = [
   { farmSlug: "burnview", name: "Main Drag Lines", codes: rCodes(1, 25) },
   { farmSlug: "burnview", name: "House Drag Lines", codes: rCodes(26, 29) },
@@ -263,4 +268,9 @@ export const FARM_SECTIONS: { farmSlug: string; name: string; codes: string[] }[
   { farmSlug: "burnview", name: "Road Drag Lines", codes: rCodes(69, 73) },
   { farmSlug: "burnview", name: "Bongaan Pivot", codes: rCodes(74, 77) },
   { farmSlug: "burnview", name: "M10 Pivot", codes: rCodes(78, 81) },
+  { farmSlug: "stockton", name: "P-Pivot", codes: codeRange("SR", 1, 9) },
+  { farmSlug: "stockton", name: "B-Pivot", codes: codeRange("SR", 10, 21) },
+  { farmSlug: "stockton", name: "A-Pivot", codes: codeRange("SR", 22, 27) },
+  { farmSlug: "stockton", name: "D-Pivot", codes: codeRange("SR", 28, 39) },
+  { farmSlug: "stockton", name: "C-Pivot", codes: codeRange("SR", 40, 42) },
 ];

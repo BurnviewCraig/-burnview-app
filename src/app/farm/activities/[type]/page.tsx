@@ -625,7 +625,7 @@ export default function ActivityFormPage({ params }: { params: Promise<{ type: s
             {isMulching && (
               <p className="field-hint" style={{ padding: "0 18px 8px" }}>Only rye grass and kikuyu fields can be mulched.</p>
             )}
-            {isFertilizer && farmSections.length > 0 && (
+            {farmSections.length > 0 && (
               <div className="chip-wrap" style={{ padding: "0 18px 8px" }}>
                 {farmSections.map((s) => (
                   <button key={s.name} className="range-chip" onClick={() => selectSection(s.codes)}>

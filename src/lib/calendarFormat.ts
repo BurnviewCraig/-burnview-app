@@ -83,16 +83,30 @@ export type FertilizerGroup = {
   paddockCodes: string[];
 };
 
+// One planting batch (same farm, same day, same seed mix) collapsed into a
+// single calendar entry — mirrors FertilizerGroup, so a whole pivot planted
+// together shows as one row (e.g. "P-Pivot") instead of one per camp. Edit
+// or delete an individual paddock's entry from the farm map instead; this
+// is a read-only summary, same as the fertilizer rows.
+export type PlantingGroup = {
+  farmId: string;
+  farmName: string;
+  date: string;
+  mix: { crop: string; variety: string | null; rate: number; unit: string }[] | null;
+  paddockCodes: string[];
+};
+
 export type CalendarEvent = {
   id: string;
   farmName: string;
   label: string;
-  raw: RawActivity | WalkGroup | RawGrazing | MilkSaleGroup | FertilizerGroup;
+  raw: RawActivity | WalkGroup | RawGrazing | MilkSaleGroup | FertilizerGroup | PlantingGroup;
   isWalk: boolean;
   isGrazing?: boolean;
   isWalkGroup?: boolean;
   isMilkSale?: boolean;
   isFertilizerGroup?: boolean;
+  isPlantingGroup?: boolean;
 };
 
 // Collapses a list of paddock codes sharing the same treatment into a
@@ -141,6 +155,11 @@ export function formatPaddockGroup(codes: string[], farmSlug: string): string {
 export function fertilizerGroupLabel(g: FertilizerGroup, farmSlug: string): string {
   const rate = g.rate ? ` ${g.rate}kg/ha` : "";
   return `Fertilizer — ${g.product ?? ""}${rate} — ${formatPaddockGroup(g.paddockCodes, farmSlug)}`;
+}
+
+export function plantingGroupLabel(g: PlantingGroup, farmSlug: string): string {
+  const mix = g.mix?.map((m) => `${m.rate}${m.unit} ${m.crop}${m.variety ? ` (${m.variety})` : ""}`).join(", ") ?? "";
+  return `Planting${mix ? ` — ${mix}` : ""} — ${formatPaddockGroup(g.paddockCodes, farmSlug)}`;
 }
 
 export const TYPE_LABEL: Record<string, string> = {
@@ -205,8 +224,28 @@ export function eventsFromCalendarData(
 ): CalendarEvent[] {
   const allActivities = data?.activities ?? [];
   const fertActivities = allActivities.filter((a) => a.type === "FERTILIZER");
-  const otherActivities = allActivities.filter((a) => a.type !== "FERTILIZER");
+  const plantActivities = allActivities.filter((a) => a.type === "PLANTING");
+  const otherActivities = allActivities.filter((a) => a.type !== "FERTILIZER" && a.type !== "PLANTING");
   const acts = otherActivities.map((a) => ({ id: a.id, farmName: a.farm.name, label: activityLabel(a), raw: a, isWalk: false }));
+
+  const plantGroupMap = new Map<string, PlantingGroup & { farmSlug: string }>();
+  for (const a of plantActivities) {
+    const date = a.date.slice(0, 10);
+    const key = `${a.farmId}|${date}|${JSON.stringify(a.mix)}`;
+    const existing = plantGroupMap.get(key);
+    if (existing) existing.paddockCodes.push(a.paddock.code);
+    else plantGroupMap.set(key, { farmId: a.farmId, farmName: a.farm.name, farmSlug: a.farm.slug, date, mix: a.mix, paddockCodes: [a.paddock.code] });
+  }
+  const plantGroups: CalendarEvent[] = [...plantGroupMap.values()]
+    .sort((a, b) => (Math.min(...a.paddockCodes.map(numPart)) - Math.min(...b.paddockCodes.map(numPart))))
+    .map((g) => ({
+      id: `plant-${g.farmId}-${g.date}-${JSON.stringify(g.mix)}`,
+      farmName: g.farmName,
+      label: plantingGroupLabel(g, g.farmSlug),
+      raw: g,
+      isWalk: false,
+      isPlantingGroup: true,
+    }));
 
   const fertGroupMap = new Map<string, FertilizerGroup & { farmSlug: string }>();
   for (const a of fertActivities) {
@@ -275,10 +314,10 @@ export function eventsFromCalendarData(
   const priority = (e: CalendarEvent): number => {
     if (e.isGrazing || e.isMilkSale) return 0;
     if (e.isFertilizerGroup) return 3;
-    if (!e.isWalk && (e.raw as RawActivity).type === "MULCHING") return 1;
+    if (!e.isWalk && !e.isPlantingGroup && (e.raw as RawActivity).type === "MULCHING") return 1;
     return 2;
   };
-  return [...acts, ...walks, ...grazing, ...milkSales, ...fertGroups].sort((a, b) => priority(a) - priority(b));
+  return [...acts, ...walks, ...grazing, ...milkSales, ...plantGroups, ...fertGroups].sort((a, b) => priority(a) - priority(b));
 }
 
 // Trailing numeric part of a paddock code (R41 -> 41), for ordering by

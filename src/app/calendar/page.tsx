@@ -42,7 +42,7 @@ export default function CalendarPage() {
   }, [data]);
 
   const openEdit = (e: CalendarEvent) => {
-    if (e.isGrazing || e.isFertilizerGroup) return; // shown for reference here — edit/delete a single paddock's entry from the farm map
+    if (e.isGrazing || e.isFertilizerGroup || e.isPlantingGroup) return; // shown for reference here — edit/delete a single paddock's entry from the farm map
     if (e.isWalkGroup) {
       const g = e.raw as WalkGroup;
       router.push(`/food/data-entry/pasture-walk?farmId=${g.farmId}&date=${g.date}`);
@@ -114,7 +114,7 @@ export default function CalendarPage() {
   };
 
   const handleEventClick = (e: CalendarEvent) => {
-    if (e.isGrazing || e.isFertilizerGroup) return;
+    if (e.isGrazing || e.isFertilizerGroup || e.isPlantingGroup) return;
     if (e.isWalkGroup || e.isMilkSale) { if (!selectMode) openEdit(e); return; } // a whole day's sheet/farm total, not a single selectable/deletable row
     if (selectMode) toggleSelected(e.id);
     else openEdit(e);
@@ -164,8 +164,8 @@ export default function CalendarPage() {
                     {events.length === 0 && <span className="calendar-empty">Nothing logged</span>}
                     {events.map((e) => {
                       const isSelected = selectedIds.has(e.id);
-                      const selectable = !e.isGrazing && !e.isWalkGroup && !e.isMilkSale && !e.isFertilizerGroup;
-                      const clickable = !e.isGrazing && !e.isFertilizerGroup && !((e.isWalkGroup || e.isMilkSale) && selectMode);
+                      const selectable = !e.isGrazing && !e.isWalkGroup && !e.isMilkSale && !e.isFertilizerGroup && !e.isPlantingGroup;
+                      const clickable = !e.isGrazing && !e.isFertilizerGroup && !e.isPlantingGroup && !((e.isWalkGroup || e.isMilkSale) && selectMode);
                       return (
                         <div
                           key={e.id}
