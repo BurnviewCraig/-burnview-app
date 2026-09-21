@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { X, Footprints, ChevronRight, Printer } from "lucide-react";
 import {
@@ -195,7 +195,21 @@ export default function FarmWedgePage() {
     return Math.round(withMulch.reduce((s, p) => s + (p.mulchDays ?? 0), 0) / withMulch.length);
   }, [sorted]);
 
-  const chartWidth = current ? Math.max(420, sorted.length * 13) : 420;
+  // A farm with few paddocks (e.g. Stockton) was only ever sized by
+  // paddock count, leaving the chart stranded in a fraction of the screen
+  // with the rest blank — stretch it to fill whatever width is actually
+  // available, and only let paddock count push it wider than that (so a
+  // paddock-heavy farm still scrolls instead of squashing every bar).
+  const chartScrollRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(420);
+  useEffect(() => {
+    const el = chartScrollRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setContainerWidth(Math.floor(entry.contentRect.width)));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const chartWidth = current ? Math.max(containerWidth, sorted.length * 13) : containerWidth;
 
   if (loading) return <div className="screen"><Header title="Farm wedge" backHref="/food" /><Spinner /></div>;
   if (error) return <div className="screen"><Header title="Farm wedge" backHref="/food" /><div className="empty">{error}</div></div>;
@@ -269,7 +283,7 @@ export default function FarmWedgePage() {
             <p className="ds-note">No pasture walks recorded yet for {current.name} — enter one from Data entry to see the wedge.</p>
           ) : (
             <>
-              <div className="wedge-chart-scroll no-print">
+              <div className="wedge-chart-scroll no-print" ref={chartScrollRef}>
                 <div style={{ width: chartWidth }}>
                   <WedgeCharts width={chartWidth} sorted={sorted} avgMulch={avgMulch} onBarClick={setSelected} selectedId={selected?.id} />
                 </div>

@@ -49,7 +49,14 @@ export async function GET() {
   const result = farms.map((farm) => {
     // date-sorted headcount history per group, so a grazing event on any
     // date can look up "the count as of then" even on a day nothing was
-    // logged (carries the last known reading forward).
+    // logged (carries the last known reading forward). A grazing session
+    // older than the earliest count on file falls back to that earliest
+    // count instead of null — the herd obviously wasn't zero cows just
+    // because nobody had logged a count yet, and treating an unknown
+    // headcount as 0 (rather than the closest real number) was silently
+    // wiping out most of the DM-removed correction for any paddock grazed
+    // before headcount tracking started, making its growth read as a sharp
+    // drop instead of the normal regrowth every other paddock showed.
     const countHistory = new Map(
       farm.cattleGroups.map((g) => [g.id, g.counts])
     );
@@ -61,7 +68,7 @@ export async function GET() {
         if (c.date > date) break;
         best = c.count;
       }
-      return best;
+      return best ?? history[0].count;
     }
 
     const paddocks = farm.paddocks.map((p) => {
