@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { X, Footprints, ChevronRight, Printer } from "lucide-react";
 import {
@@ -200,10 +200,14 @@ export default function FarmWedgePage() {
   // with the rest blank — stretch it to fill whatever width is actually
   // available, and only let paddock count push it wider than that (so a
   // paddock-heavy farm still scrolls instead of squashing every bar).
-  const chartScrollRef = useRef<HTMLDivElement>(null);
+  //
+  // A callback ref, not useRef + useEffect(…, []) — the scroll div doesn't
+  // exist yet on first mount (no farm is selected until the user taps a
+  // tab), so a one-shot effect on mount would find a null ref and never
+  // run again. A callback ref fires fresh every time the node itself
+  // (re)appears, which is exactly when there's something to measure.
   const [containerWidth, setContainerWidth] = useState(420);
-  useEffect(() => {
-    const el = chartScrollRef.current;
+  const chartScrollRef = useCallback((el: HTMLDivElement | null) => {
     if (!el) return;
     const observer = new ResizeObserver(([entry]) => setContainerWidth(Math.floor(entry.contentRect.width)));
     observer.observe(el);
