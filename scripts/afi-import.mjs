@@ -10,11 +10,13 @@
 //
 // Two separate AFI parlor systems feed this, each on its own schedule since
 // their exports land at different times of night: Burnview/Everfair share
-// one (synced via the Burnview Dairy OneDrive account into "Craig Export",
-// run at 9pm), Stockton runs its own separate system (synced into this PC's
-// personal OneDrive as "Report Exports", run at 11pm since its export lands
-// later, around 10pm). Each gets its own group/tank mapping below since
-// group and tank numbers are local to each system, not global.
+// one (synced into this PC's personal OneDrive as "Report Export", run at
+// 9pm — moved here from the old "OneDrive - Burnview" business account sync
+// on 2026-09-22 since that sync had stopped working), Stockton runs its own
+// separate system (synced into this PC's personal OneDrive as "Report
+// Exports", run at 11pm since its export lands later, around 10pm). Each
+// gets its own group/tank mapping below since group and tank numbers are
+// local to each system, not global.
 //
 // Safe to re-run: group readings are upserted per (group, date), and
 // milk-sold rows are deduped by AFI's own invoice number (sourceRef), so a
@@ -29,9 +31,7 @@ const SOURCES = [
   {
     key: "burnview",
     name: "Burnview/Everfair",
-    exportDir:
-      process.env.AFI_EXPORT_DIR ||
-      "C:\\Users\\craig\\OneDrive - Burnview\\Burnview Dairy's files - Craig Export 1",
+    exportDir: process.env.AFI_EXPORT_DIR || "C:\\Users\\craig\\OneDrive\\Report Export",
     // AFI group number -> which farm + which CattleGroup.name it is. 70/71
     // are the Burnview/Everfair hospital pens — deliberately not one of the
     // four tracked groups, so they're just left out.
