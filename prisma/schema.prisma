@@ -517,9 +517,10 @@ model DieselAsset {
 // the displayed rate (L/hour or km/L) for that whole stretch is one
 // average — see the computation in app/diesel/history/page.tsx.
 //
-// paddockCodes/activities are snapshotted as plain strings rather than
-// relations, since this is a compliance record that must not silently
-// change if a paddock is later renamed or an activity list edited.
+// paddockCodes/activities/workedFarm/filledAtFarm are snapshotted as plain
+// strings rather than relations, since this is a compliance record that
+// must not silently change if a paddock/farm is later renamed, and must
+// never cascade-delete if a farm record ever did.
 model DieselLogEntry {
   id             String   @id @default(cuid())
   assetId        String
@@ -531,6 +532,18 @@ model DieselLogEntry {
   activities     Json? // string[]
   paddockCodes   Json? // string[]
   comment        String? // e.g. "Road trip, not field work" or "In for repairs"
+  // Which farm the asset actually worked at that day — usually its home
+  // farm (asset.farm), but a tractor sometimes works another farm's land,
+  // so this can differ. Drives which farm's paddock list Location offers.
+  workedFarm     String?
+  // Which farm's diesel tank it was filled from — only meaningful on a
+  // fill day (litresFilled set). Independent of workedFarm: a tractor can
+  // be filled at one farm's tank before heading off to work another's land.
+  filledAtFarm   String?
+  // Whether this day's usage qualifies for the SARS diesel refund — most
+  // field work does; road trips, repairs etc. usually don't. Defaults to
+  // true so it only needs unticking on the exceptions.
+  eligible       Boolean  @default(true)
 
   createdById String?
   createdAt   DateTime @default(now())

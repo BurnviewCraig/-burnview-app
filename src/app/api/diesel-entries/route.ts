@@ -16,6 +16,9 @@ function serialize(e: {
   activities: unknown;
   paddockCodes: unknown;
   comment: string | null;
+  workedFarm: string | null;
+  filledAtFarm: string | null;
+  eligible: boolean;
   createdAt: Date;
 }) {
   return {
@@ -30,6 +33,9 @@ function serialize(e: {
     activities: (e.activities as string[] | null) ?? [],
     paddockCodes: (e.paddockCodes as string[] | null) ?? [],
     comment: e.comment,
+    workedFarm: e.workedFarm,
+    filledAtFarm: e.filledAtFarm,
+    eligible: e.eligible,
     createdAt: e.createdAt.toISOString(),
   };
 }
@@ -91,6 +97,9 @@ export async function POST(req: Request) {
     activities,
     paddockCodes,
     comment,
+    workedFarm,
+    filledAtFarm,
+    eligible,
   }: {
     assetId?: string;
     date?: string;
@@ -101,6 +110,9 @@ export async function POST(req: Request) {
     activities?: string[];
     paddockCodes?: string[];
     comment?: string | null;
+    workedFarm?: string | null;
+    filledAtFarm?: string | null;
+    eligible?: boolean;
   } = body;
   if (!assetId || !date) {
     return NextResponse.json({ error: "assetId and date are required" }, { status: 400 });
@@ -116,6 +128,9 @@ export async function POST(req: Request) {
         activities: activities ?? [],
         paddockCodes: paddockCodes ?? [],
         comment: comment?.trim() || null,
+        workedFarm: workedFarm || null,
+        filledAtFarm: litresFilled ? filledAtFarm || null : null,
+        eligible: eligible !== false,
         createdById: userId,
       }
     : {
@@ -126,6 +141,9 @@ export async function POST(req: Request) {
         activities: [],
         paddockCodes: [],
         comment: comment?.trim() || null,
+        workedFarm: null,
+        filledAtFarm: null,
+        eligible: true,
         createdById: userId,
       };
   const entry = await prisma.dieselLogEntry.upsert({

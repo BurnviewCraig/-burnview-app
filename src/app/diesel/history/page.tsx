@@ -26,6 +26,9 @@ type DisplayRow = {
   activities: string[];
   paddockCodes: string[];
   comment: string | null;
+  workedFarm: string | null;
+  filledAtFarm: string | null;
+  eligible: boolean;
 };
 
 function DieselHistoryContent() {
@@ -60,6 +63,9 @@ function DieselHistoryContent() {
         activities: e.activities,
         paddockCodes: e.paddockCodes,
         comment: e.comment,
+        workedFarm: e.workedFarm,
+        filledAtFarm: e.filledAtFarm,
+        eligible: e.eligible,
       });
     });
     return map;
@@ -87,6 +93,9 @@ function DieselHistoryContent() {
           activities: [],
           paddockCodes: [],
           comment: null,
+          workedFarm: null,
+          filledAtFarm: null,
+          eligible: true,
         }
       );
       d = addDays(d, 1);
@@ -130,11 +139,14 @@ function DieselHistoryContent() {
               <th>Opening</th>
               <th>Closing</th>
               <th>Usage</th>
+              <th>Worked at</th>
               <th>Litres filled</th>
+              <th>Filled at</th>
               <th>Litres used</th>
               <th>Rate</th>
               <th>Activity</th>
               <th>Location</th>
+              <th>Eligible</th>
               <th>Comment</th>
             </tr>
           </thead>
@@ -147,17 +159,20 @@ function DieselHistoryContent() {
                   <td>{r.opening ?? "—"}{r.opening != null ? unitLabel : ""}</td>
                   <td>{r.closing ?? "—"}{r.closing != null ? unitLabel : ""}</td>
                   <td>{r.hours ?? "—"}{r.hours != null ? unitLabel : ""}</td>
+                  <td>{r.workedFarm ?? "—"}</td>
                   <td>{r.litresFilled ?? "—"}{r.litresFilled != null ? "L" : ""}</td>
+                  <td>{r.filledAtFarm ?? "—"}</td>
                   <td>{r.litresUsed ?? "—"}{r.litresUsed != null ? "L" : ""}</td>
                   <td>{r.rate ?? "—"}{r.rate != null ? ` ${rateLabel}` : ""}</td>
                   <td>{r.activities.join(", ") || "—"}</td>
                   <td>{r.paddockCodes.join(", ") || "—"}</td>
+                  <td>{r.eligible ? "Yes" : "No"}</td>
                   <td>{r.comment ?? ""}</td>
                 </tr>
               ) : (
                 <tr key={r.date} className="diesel-not-worked">
                   <td>{r.date}</td>
-                  <td colSpan={9}>Asset not worked</td>
+                  <td colSpan={12}>Asset not worked</td>
                   <td>{r.comment ?? ""}</td>
                 </tr>
               )

@@ -108,11 +108,14 @@ export default function DieselPage() {
                 <th>Opening</th>
                 <th>Closing</th>
                 <th>Usage</th>
+                <th>Worked at</th>
                 <th>Litres filled</th>
+                <th>Filled at</th>
                 <th>Litres used</th>
                 <th>Rate</th>
                 <th>Activity</th>
                 <th>Location</th>
+                <th>Eligible</th>
                 <th>Comment</th>
               </tr>
             </thead>
@@ -121,20 +124,23 @@ export default function DieselPage() {
                 <tr key={a.id} className="diesel-row-clickable" onClick={() => setActiveAsset(a)}>
                   <td>{a.name}</td>
                   {!e ? (
-                    <td colSpan={10} className="diesel-not-worked-cell">Not logged yet</td>
+                    <td colSpan={13} className="diesel-not-worked-cell">Not logged yet</td>
                   ) : !e.worked ? (
-                    <td colSpan={10} className="diesel-not-worked-cell">Parked{e.comment ? ` — ${e.comment}` : ""}</td>
+                    <td colSpan={13} className="diesel-not-worked-cell">Parked{e.comment ? ` — ${e.comment}` : ""}</td>
                   ) : (
                     <>
                       <td>{e.driver?.name ?? "—"}</td>
                       <td>{e.openingReading ?? "—"}{e.openingReading != null ? unitLabel(a) : ""}</td>
                       <td>{c?.closing ?? "—"}{c?.closing != null ? unitLabel(a) : ""}</td>
                       <td>{c?.hours ?? "—"}{c?.hours != null ? unitLabel(a) : ""}</td>
+                      <td>{e.workedFarm ?? "—"}</td>
                       <td>{e.litresFilled ?? "—"}{e.litresFilled != null ? "L" : ""}</td>
+                      <td>{e.filledAtFarm ?? "—"}</td>
                       <td>{c?.litresUsed ?? "—"}{c?.litresUsed != null ? "L" : ""}</td>
                       <td>{c?.rate ?? "—"}{c?.rate != null ? ` ${rateLabel(a)}` : ""}</td>
                       <td>{e.activities.join(", ") || "—"}</td>
                       <td>{e.paddockCodes.join(", ") || "—"}</td>
+                      <td>{e.eligible ? "Yes" : "No"}</td>
                       <td>{e.comment ?? ""}</td>
                     </>
                   )}
@@ -153,7 +159,7 @@ export default function DieselPage() {
           asset={activeAsset}
           date={date}
           farmName={farm.name}
-          paddocks={farm.paddocks}
+          farms={farms}
           workers={workers}
           activityTypes={activityTypes}
           priorEntries={entriesByAsset.get(activeAsset.id) ?? []}
@@ -366,7 +372,7 @@ function AssetEntryPanel({
   asset,
   date,
   farmName,
-  paddocks,
+  farms,
   workers,
   activityTypes,
   priorEntries,
@@ -377,7 +383,7 @@ function AssetEntryPanel({
   asset: DieselAsset;
   date: string;
   farmName: string;
-  paddocks: Farm["paddocks"];
+  farms: Farm[];
   workers: Worker[];
   activityTypes: DieselActivityType[];
   priorEntries: DieselLogEntry[];
@@ -392,6 +398,12 @@ function AssetEntryPanel({
   const [activities, setActivities] = useState<string[]>(existingEntry?.activities ?? []);
   const [paddockCodes, setPaddockCodes] = useState<string[]>(existingEntry?.paddockCodes ?? []);
   const [comment, setComment] = useState(existingEntry?.comment ?? "");
+  // Which farm it actually worked at (usually its home farm — sometimes
+  // not), and where it was filled from — independent of each other, and
+  // both independent of asset.farmId, which never changes here.
+  const [workedFarm, setWorkedFarm] = useState(existingEntry?.workedFarm ?? farmName);
+  const [filledAtFarm, setFilledAtFarm] = useState(existingEntry?.filledAtFarm ?? farmName);
+  const [eligible, setEligible] = useState(existingEntry?.eligible ?? true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -404,7 +416,15 @@ function AssetEntryPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const orderedPaddocks = useMemo(() => [...paddocks].sort(byPaddockNumber), [paddocks]);
+  // Location offers whichever farm it actually worked at that day's
+  // paddocks, not necessarily the asset's home farm — switching farm
+  // clears any already-picked codes, since they belong to the old one.
+  const workedFarmObj = farms.find((f) => f.name === workedFarm);
+  const orderedPaddocks = useMemo(() => [...(workedFarmObj?.paddocks ?? [])].sort(byPaddockNumber), [workedFarmObj]);
+  const changeWorkedFarm = (name: string) => {
+    setWorkedFarm(name);
+    setPaddockCodes([]);
+  };
 
   const toggleActivity = (a: string) =>
     setActivities((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
@@ -426,6 +446,9 @@ function AssetEntryPanel({
         activities,
         paddockCodes,
         comment: comment.trim() || null,
+        workedFarm,
+        filledAtFarm,
+        eligible,
       }),
     });
     setSaving(false);
@@ -477,6 +500,16 @@ function AssetEntryPanel({
               </label>
 
               <label className="field">
+                <span className="field-label">Working at</span>
+                <select className="field-input" value={workedFarm} onChange={(e) => changeWorkedFarm(e.target.value)}>
+                  {farms.map((f) => (
+                    <option key={f.id} value={f.name}>{f.name}</option>
+                  ))}
+                </select>
+                {workedFarm !== farmName && <span className="field-hint">Working away from {asset.name}&apos;s home farm ({farmName}) today.</span>}
+              </label>
+
+              <label className="field">
                 <span className="field-label">Opening {asset.unit === "HOURS" ? "hours" : "km"}</span>
                 <input
                   className="field-input"
@@ -493,6 +526,18 @@ function AssetEntryPanel({
                 <input className="field-input" type="text" inputMode="decimal" value={litres} onChange={(e) => setLitres(sanitizeDecimalInput(e.target.value))} placeholder="Leave blank if you didn't fill today" />
                 <span className="field-hint">Doesn&apos;t need to be every day — if it&apos;s a few days between fills, this fill gets spread back over the days worked since the last one, by hours/km worked each day.</span>
               </label>
+
+              {litres !== "" && (
+                <label className="field">
+                  <span className="field-label">Filled at</span>
+                  <select className="field-input" value={filledAtFarm} onChange={(e) => setFilledAtFarm(e.target.value)}>
+                    {farms.map((f) => (
+                      <option key={f.id} value={f.name}>{f.name}</option>
+                    ))}
+                  </select>
+                  <span className="field-hint">Which farm&apos;s diesel tank it was filled from.</span>
+                </label>
+              )}
 
               <div className="field">
                 <span className="field-label">Activity ({activities.length} selected)</span>
@@ -529,6 +574,11 @@ function AssetEntryPanel({
                   );
                 })}
               </div>
+
+              <label className="bulk-field-row" style={{ marginTop: 4 }}>
+                <input type="checkbox" checked={eligible} onChange={(e) => setEligible(e.target.checked)} />
+                <span className="field-label">Eligible for diesel refund</span>
+              </label>
             </>
           )}
 

@@ -275,6 +275,9 @@ export type DieselLogEntry = {
   activities: string[];
   paddockCodes: string[];
   comment: string | null;
+  workedFarm: string | null;
+  filledAtFarm: string | null;
+  eligible: boolean;
   createdAt: string;
 };
 
