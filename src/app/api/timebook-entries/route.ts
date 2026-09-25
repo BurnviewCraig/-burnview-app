@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const { workerId, date, code, overtime } = body as {
     workerId?: string;
     date?: string;
-    code?: "PRESENT" | "SICK" | "LEAVE" | "ABSENT" | "OFF" | null;
+    code?: "PRESENT" | "SICK" | "LEAVE" | "ABSENT" | "OFF" | "FAMILY_RESPONSIBILITY" | null;
     overtime?: string | null;
   };
   if (!workerId || !date) {

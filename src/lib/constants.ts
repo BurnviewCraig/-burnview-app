@@ -226,6 +226,7 @@ export const ATTENDANCE_CODES = [
   { id: "LEAVE", letter: "L", label: "Leave" },
   { id: "ABSENT", letter: "A", label: "Absent" },
   { id: "OFF", letter: "O", label: "Off" },
+  { id: "FAMILY_RESPONSIBILITY", letter: "F", label: "Family responsibility" },
 ] as const;
 
 export const ATTENDANCE_LETTER: Record<string, string> = Object.fromEntries(

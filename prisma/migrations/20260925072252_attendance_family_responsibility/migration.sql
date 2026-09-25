@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AttendanceCode" ADD VALUE 'FAMILY_RESPONSIBILITY';

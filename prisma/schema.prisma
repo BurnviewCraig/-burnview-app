@@ -394,13 +394,14 @@ enum TimeBookSection {
   TOGH
 }
 
-// / = present, L = leave, A = absent, O = off, S = sick
+// / = present, L = leave, A = absent, O = off, S = sick, F = family responsibility
 enum AttendanceCode {
   PRESENT
   LEAVE
   ABSENT
   OFF
   SICK
+  FAMILY_RESPONSIBILITY
 }
 
 model Worker {
