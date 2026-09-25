@@ -218,6 +218,7 @@ export const TIMEBOOK_SECTIONS = [
   { id: "DAIRY", name: "Dairy" },
   { id: "STAFF", name: "Staff" },
   { id: "TOGH", name: "Togh" },
+  { id: "HAYDEN", name: "Hayden" },
 ] as const;
 
 export const ATTENDANCE_CODES = [

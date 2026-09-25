@@ -392,6 +392,7 @@ enum TimeBookSection {
   DAIRY
   STAFF
   TOGH
+  HAYDEN
 }
 
 // / = present, L = leave, A = absent, O = off, S = sick, F = family responsibility

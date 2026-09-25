@@ -231,7 +231,7 @@ export type GrazingAllocation = {
 export type Worker = {
   id: string;
   farmId: string;
-  section: "DAIRY" | "STAFF" | "TOGH";
+  section: "DAIRY" | "STAFF" | "TOGH" | "HAYDEN";
   name: string;
   role: string | null;
   notes: string | null;

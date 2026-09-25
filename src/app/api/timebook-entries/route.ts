@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   const entries = await prisma.timeBookEntry.findMany({
     where: {
       date: { gte: new Date(start), lte: new Date(end) },
-      worker: { farmId, section: section as "DAIRY" | "STAFF" | "TOGH" },
+      worker: { farmId, section: section as "DAIRY" | "STAFF" | "TOGH" | "HAYDEN" },
     },
   });
   return NextResponse.json({ entries });

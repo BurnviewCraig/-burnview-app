@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const workers = await prisma.worker.findMany({
     where: {
       ...(farmId ? { farmId } : {}),
-      ...(section ? { section: section as "DAIRY" | "STAFF" | "TOGH" } : {}),
+      ...(section ? { section: section as "DAIRY" | "STAFF" | "TOGH" | "HAYDEN" } : {}),
       ...(includeInactive ? {} : { active: true }),
     },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   const worker = await prisma.worker.create({
     data: {
       farmId,
-      section: section as "DAIRY" | "STAFF" | "TOGH",
+      section: section as "DAIRY" | "STAFF" | "TOGH" | "HAYDEN",
       name: name.trim(),
       role: role?.trim() || null,
       notes: notes?.trim() || null,

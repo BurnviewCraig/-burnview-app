@@ -11,7 +11,7 @@ import { addDays } from "@/lib/calendarFormat";
 import { TIMEBOOK_SECTIONS, ATTENDANCE_CODES, ATTENDANCE_LETTER } from "@/lib/constants";
 import type { Farm, Worker, TimeBookEntry } from "@/lib/types";
 
-type Section = "DAIRY" | "STAFF" | "TOGH";
+type Section = "DAIRY" | "STAFF" | "TOGH" | "HAYDEN";
 
 function mondayOf(dateStr: string): string {
   const dow = new Date(dateStr + "T00:00:00Z").getUTCDay(); // 0=Sun..6=Sat
