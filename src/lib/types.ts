@@ -278,6 +278,9 @@ export type DieselLogEntry = {
   workedFarm: string | null;
   filledAtFarm: string | null;
   eligible: boolean;
+  secondReading: number | null;
+  secondLitresFilled: number | null;
+  secondFilledAtFarm: string | null;
   createdAt: string;
 };
 

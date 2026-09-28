@@ -546,6 +546,14 @@ model DieselLogEntry {
   // field work does; road trips, repairs etc. usually don't. Defaults to
   // true so it only needs unticking on the exceptions.
   eligible       Boolean  @default(true)
+  // A second, same-day refuel — heavy-work days sometimes need topping up
+  // again before end of day. secondReading is the meter reading AT that
+  // second fill (between openingReading and the day's closing), so the
+  // day's usage can still be split and prorated correctly either side of
+  // it. Both null on an ordinary single-fill (or no-fill) day.
+  secondReading      Float?
+  secondLitresFilled Float?
+  secondFilledAtFarm String?
 
   createdById String?
   createdAt   DateTime @default(now())

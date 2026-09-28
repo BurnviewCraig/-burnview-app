@@ -134,8 +134,11 @@ export default function DieselPage() {
                       <td>{c?.closing ?? "—"}{c?.closing != null ? unitLabel(a) : ""}</td>
                       <td>{c?.hours ?? "—"}{c?.hours != null ? unitLabel(a) : ""}</td>
                       <td>{e.workedFarm ?? "—"}</td>
-                      <td>{e.litresFilled ?? "—"}{e.litresFilled != null ? "L" : ""}</td>
-                      <td>{e.filledAtFarm ?? "—"}</td>
+                      <td>
+                        {e.litresFilled ?? "—"}{e.litresFilled != null ? "L" : ""}
+                        {e.secondLitresFilled != null ? ` + ${e.secondLitresFilled}L` : ""}
+                      </td>
+                      <td>{e.filledAtFarm ?? "—"}{e.secondFilledAtFarm && e.secondFilledAtFarm !== e.filledAtFarm ? ` + ${e.secondFilledAtFarm}` : ""}</td>
                       <td>{c?.litresUsed ?? "—"}{c?.litresUsed != null ? "L" : ""}</td>
                       <td>{c?.rate ?? "—"}{c?.rate != null ? ` ${rateLabel(a)}` : ""}</td>
                       <td>{e.activities.join(", ") || "—"}</td>
@@ -404,6 +407,11 @@ function AssetEntryPanel({
   const [workedFarm, setWorkedFarm] = useState(existingEntry?.workedFarm ?? farmName);
   const [filledAtFarm, setFilledAtFarm] = useState(existingEntry?.filledAtFarm ?? farmName);
   const [eligible, setEligible] = useState(existingEntry?.eligible ?? true);
+  // Heavy-work days sometimes need a second, same-day top-up.
+  const [secondFill, setSecondFill] = useState(existingEntry?.secondLitresFilled != null);
+  const [secondReading, setSecondReading] = useState(existingEntry?.secondReading != null ? String(existingEntry.secondReading) : "");
+  const [secondLitres, setSecondLitres] = useState(existingEntry?.secondLitresFilled != null ? String(existingEntry.secondLitresFilled) : "");
+  const [secondFilledAtFarm, setSecondFilledAtFarm] = useState(existingEntry?.secondFilledAtFarm ?? farmName);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -449,6 +457,9 @@ function AssetEntryPanel({
         workedFarm,
         filledAtFarm,
         eligible,
+        secondReading: secondFill && secondReading !== "" ? Number(secondReading) : null,
+        secondLitresFilled: secondFill && secondLitres !== "" ? Number(secondLitres) : null,
+        secondFilledAtFarm,
       }),
     });
     setSaving(false);
@@ -537,6 +548,39 @@ function AssetEntryPanel({
                   </select>
                   <span className="field-hint">Which farm&apos;s diesel tank it was filled from.</span>
                 </label>
+              )}
+
+              <label className="bulk-field-row">
+                <input type="checkbox" checked={secondFill} onChange={(e) => setSecondFill(e.target.checked)} />
+                <span className="field-label">2nd refuel today</span>
+              </label>
+
+              {secondFill && (
+                <>
+                  <label className="field">
+                    <span className="field-label">Reading at 2nd fill ({asset.unit === "HOURS" ? "hours" : "km"})</span>
+                    <input
+                      className="field-input"
+                      type="text"
+                      inputMode="decimal"
+                      value={secondReading}
+                      onChange={(e) => setSecondReading(sanitizeDecimalInput(e.target.value))}
+                      placeholder={asset.unit === "HOURS" ? "e.g. 1209.5" : "e.g. 88340"}
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Litres filled (2nd fill)</span>
+                    <input className="field-input" type="text" inputMode="decimal" value={secondLitres} onChange={(e) => setSecondLitres(sanitizeDecimalInput(e.target.value))} />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Filled at (2nd fill)</span>
+                    <select className="field-input" value={secondFilledAtFarm} onChange={(e) => setSecondFilledAtFarm(e.target.value)}>
+                      {farms.map((f) => (
+                        <option key={f.id} value={f.name}>{f.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
               )}
 
               <div className="field">

@@ -19,6 +19,9 @@ function serialize(e: {
   workedFarm: string | null;
   filledAtFarm: string | null;
   eligible: boolean;
+  secondReading: number | null;
+  secondLitresFilled: number | null;
+  secondFilledAtFarm: string | null;
   createdAt: Date;
 }) {
   return {
@@ -36,6 +39,9 @@ function serialize(e: {
     workedFarm: e.workedFarm,
     filledAtFarm: e.filledAtFarm,
     eligible: e.eligible,
+    secondReading: e.secondReading,
+    secondLitresFilled: e.secondLitresFilled,
+    secondFilledAtFarm: e.secondFilledAtFarm,
     createdAt: e.createdAt.toISOString(),
   };
 }
@@ -100,6 +106,9 @@ export async function POST(req: Request) {
     workedFarm,
     filledAtFarm,
     eligible,
+    secondReading,
+    secondLitresFilled,
+    secondFilledAtFarm,
   }: {
     assetId?: string;
     date?: string;
@@ -113,6 +122,9 @@ export async function POST(req: Request) {
     workedFarm?: string | null;
     filledAtFarm?: string | null;
     eligible?: boolean;
+    secondReading?: number | null;
+    secondLitresFilled?: number | null;
+    secondFilledAtFarm?: string | null;
   } = body;
   if (!assetId || !date) {
     return NextResponse.json({ error: "assetId and date are required" }, { status: 400 });
@@ -131,6 +143,9 @@ export async function POST(req: Request) {
         workedFarm: workedFarm || null,
         filledAtFarm: litresFilled ? filledAtFarm || null : null,
         eligible: eligible !== false,
+        secondReading: secondReading ?? null,
+        secondLitresFilled: secondLitresFilled ?? null,
+        secondFilledAtFarm: secondLitresFilled ? secondFilledAtFarm || null : null,
         createdById: userId,
       }
     : {
@@ -144,6 +159,9 @@ export async function POST(req: Request) {
         workedFarm: null,
         filledAtFarm: null,
         eligible: true,
+        secondReading: null,
+        secondLitresFilled: null,
+        secondFilledAtFarm: null,
         createdById: userId,
       };
   const entry = await prisma.dieselLogEntry.upsert({

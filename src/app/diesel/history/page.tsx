@@ -29,6 +29,9 @@ type DisplayRow = {
   workedFarm: string | null;
   filledAtFarm: string | null;
   eligible: boolean;
+  secondReading: number | null;
+  secondLitresFilled: number | null;
+  secondFilledAtFarm: string | null;
 };
 
 function DieselHistoryContent() {
@@ -66,6 +69,9 @@ function DieselHistoryContent() {
         workedFarm: e.workedFarm,
         filledAtFarm: e.filledAtFarm,
         eligible: e.eligible,
+        secondReading: e.secondReading,
+        secondLitresFilled: e.secondLitresFilled,
+        secondFilledAtFarm: e.secondFilledAtFarm,
       });
     });
     return map;
@@ -96,6 +102,9 @@ function DieselHistoryContent() {
           workedFarm: null,
           filledAtFarm: null,
           eligible: true,
+          secondReading: null,
+          secondLitresFilled: null,
+          secondFilledAtFarm: null,
         }
       );
       d = addDays(d, 1);
@@ -142,6 +151,7 @@ function DieselHistoryContent() {
               <th>Worked at</th>
               <th>Litres filled</th>
               <th>Filled at</th>
+              <th>2nd fill</th>
               <th>Litres used</th>
               <th>Rate</th>
               <th>Activity</th>
@@ -162,6 +172,11 @@ function DieselHistoryContent() {
                   <td>{r.workedFarm ?? "—"}</td>
                   <td>{r.litresFilled ?? "—"}{r.litresFilled != null ? "L" : ""}</td>
                   <td>{r.filledAtFarm ?? "—"}</td>
+                  <td>
+                    {r.secondLitresFilled != null
+                      ? `${r.secondReading ?? "—"}${unitLabel} · ${r.secondLitresFilled}L @ ${r.secondFilledAtFarm ?? "—"}`
+                      : "—"}
+                  </td>
                   <td>{r.litresUsed ?? "—"}{r.litresUsed != null ? "L" : ""}</td>
                   <td>{r.rate ?? "—"}{r.rate != null ? ` ${rateLabel}` : ""}</td>
                   <td>{r.activities.join(", ") || "—"}</td>
@@ -172,7 +187,7 @@ function DieselHistoryContent() {
               ) : (
                 <tr key={r.date} className="diesel-not-worked">
                   <td>{r.date}</td>
-                  <td colSpan={12}>Asset not worked</td>
+                  <td colSpan={13}>Asset not worked</td>
                   <td>{r.comment ?? ""}</td>
                 </tr>
               )

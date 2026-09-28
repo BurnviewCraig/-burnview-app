@@ -91,16 +91,16 @@ function WedgeCharts({
 
       <BarChart width={width} height={120} data={sorted} margin={{ top: 0, right: CHART_RIGHT_MARGIN, left: 0, bottom: 0 }}>
         <XAxis dataKey="id" hide />
-        <YAxis width={CHART_Y_AXIS_WIDTH} reversed tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Days since mulched", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
+        <YAxis width={CHART_Y_AXIS_WIDTH} reversed tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Days since defoliation", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
         <Tooltip
-          formatter={(v) => [v == null ? "Never logged" : `${v} days`, "Since mulched"]}
+          formatter={(v: number) => [v == null ? "Never logged" : `${v} days`, "Since defoliation"]}
           labelFormatter={(code) => code}
           contentStyle={{ fontSize: 11, background: COLORS.card, border: `1px solid ${COLORS.paperDeep}` }}
         />
         {avgMulch != null && (
           <ReferenceLine y={avgMulch} stroke="#B5533C" strokeDasharray="4 3" label={{ value: `Avg ${avgMulch}d`, position: "insideBottomRight", fontSize: 9, fill: "#B5533C" }} />
         )}
-        <Bar dataKey="mulchDays" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined} fill={COLORS.mulch} radius={[0, 0, 2, 2]} />
+        <Bar dataKey="daysSinceDefoliation" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined} fill={COLORS.mulch} radius={[0, 0, 2, 2]} />
       </BarChart>
     </>
   );
@@ -189,10 +189,14 @@ export default function FarmWedgePage() {
     });
   }, [current]);
 
+  // Falls back to days since last grazed wherever mulching wasn't logged —
+  // for a paddock that's never mechanically mulched at all, the last
+  // grazing IS the last defoliation, so that's the meaningful "since"
+  // figure, not a blank bar.
   const avgMulch = useMemo(() => {
-    const withMulch = sorted.filter((p) => p.mulchDays != null);
-    if (!withMulch.length) return null;
-    return Math.round(withMulch.reduce((s, p) => s + (p.mulchDays ?? 0), 0) / withMulch.length);
+    const withData = sorted.filter((p) => p.daysSinceDefoliation != null);
+    if (!withData.length) return null;
+    return Math.round(withData.reduce((s, p) => s + (p.daysSinceDefoliation ?? 0), 0) / withData.length);
   }, [sorted]);
 
   // A farm with few paddocks (e.g. Stockton) was only ever sized by
