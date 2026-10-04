@@ -103,7 +103,18 @@ export async function GET(req: Request) {
       // read as "last grazed" (that previously let an upcoming allocation
       // masquerade as history, with a negative days-since).
       const pastAllocations = p.grazingAllocations.filter((a) => a.date <= asOfDate);
-      const futureAllocations = p.grazingAllocations.filter((a) => a.date > asOfDate);
+      // Bounded to a near-term window from asOf, not "any future date
+      // whatsoever" — an unbounded check meant a FROZEN historical wedge's
+      // highlight could keep changing after the fact, as new allocations
+      // got planned further out on the calendar weeks later (those new
+      // rows still have date > that old asOf, so they'd silently start
+      // showing up as "upcoming" on an old wedge that had already been
+      // looked at/printed). Same 7-day span as recentlyGrazed looks back,
+      // so only plans that genuinely existed within a week of that
+      // session count — later planning for dates beyond that falls
+      // outside the window and leaves the old wedge alone.
+      const upcomingWindowEnd = new Date(asOfDate.getTime() + 7 * 86400000);
+      const futureAllocations = p.grazingAllocations.filter((a) => a.date > asOfDate && a.date <= upcomingWindowEnd);
 
       let growthPerDay: number | null = null;
       let wasDefoliated = false;
