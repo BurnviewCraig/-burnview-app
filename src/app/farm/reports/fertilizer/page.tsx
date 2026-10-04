@@ -19,6 +19,15 @@ type ReportRow = {
   K: number;
   S: number;
 };
+type ReportEntry = {
+  id: string;
+  date: string;
+  paddockCode: string;
+  farmName: string;
+  product: string;
+  rate: number;
+  notes: string | null;
+};
 type ReportData = {
   rows: ReportRow[];
   totals: { N: number; P: number; K: number; S: number };
@@ -27,6 +36,7 @@ type ReportData = {
   excludedNoSize: number;
   unrecognizedProducts: string[];
   placeholderProducts: string[];
+  entries: ReportEntry[];
 };
 
 const NUTRIENTS = ["N", "P", "K", "S"] as const;
@@ -41,6 +51,7 @@ export default function FertilizerReportPage() {
   const [farmId, setFarmId] = useState<string>("all");
   const [range, setRange] = useState<string>("ytd");
   const [scope, setScope] = useState<"pasture" | "all">("pasture");
+  const [view, setView] = useState<"summary" | "entries">("summary");
 
   const { data, loading } = useApi<ReportData>(`/api/reports/fertilizer?farmId=${farmId}&range=${range}&scope=${scope}`);
 
@@ -72,68 +83,115 @@ export default function FertilizerReportPage() {
         </div>
       </div>
 
+      <div style={{ padding: "10px 18px 0" }}>
+        <span className="field-label">View</span>
+        <div className="chip-wrap" style={{ marginTop: 4 }}>
+          <button className={`range-chip${view === "summary" ? " on" : ""}`} onClick={() => setView("summary")}>N/P/K/S summary</button>
+          <button className={`range-chip${view === "entries" ? " on" : ""}`} onClick={() => setView("entries")}>Entries (what got what, when)</button>
+        </div>
+      </div>
+
       {loading || !data ? (
         <Spinner />
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-          <p className="field-hint" style={{ padding: "12px 18px 0" }}>
-            Average kg/ha is area-weighted across {data.rows.length - data.excludedNoSize} camp{data.rows.length - data.excludedNoSize === 1 ? "" : "s"}
-            {data.excludedNoSize > 0 ? ` (${data.excludedNoSize} excluded — no size on file)` : ""}, {data.totalHa}ha total.
-          </p>
+          {view === "summary" ? (
+            <>
+              <p className="field-hint" style={{ padding: "12px 18px 0" }}>
+                Average kg/ha is area-weighted across {data.rows.length - data.excludedNoSize} camp{data.rows.length - data.excludedNoSize === 1 ? "" : "s"}
+                {data.excludedNoSize > 0 ? ` (${data.excludedNoSize} excluded — no size on file)` : ""}, {data.totalHa}ha total.
+              </p>
 
-          <div className="holistic-summary" style={{ padding: "10px 18px" }}>
-            {NUTRIENTS.map((n) => (
-              <div key={n}>
-                <span className="num">{data.avgPerHa[n]}</span>
-                <span className="lbl">kg {n}/ha — {NUTRIENT_NAME[n]}</span>
-              </div>
-            ))}
-          </div>
-
-          {(data.unrecognizedProducts.length > 0 || data.placeholderProducts.length > 0) && (
-            <div className="wedge-info-box" style={{ margin: "0 18px 10px" }}>
-              {data.unrecognizedProducts.length > 0 && (
-                <div><span className="wib-k">Unrecognized product{data.unrecognizedProducts.length === 1 ? "" : "s"}</span><span className="wib-v">{data.unrecognizedProducts.join(", ")} — counted as 0 nutrient</span></div>
-              )}
-              {data.placeholderProducts.length > 0 && (
-                <div><span className="wib-k">Placeholder analysis</span><span className="wib-v">{data.placeholderProducts.join(", ")} — real N/P/K/S %s not set in Settings &gt; Fertilizer yet</span></div>
-              )}
-            </div>
-          )}
-
-          <div className="maize-sheet-scroll" style={{ padding: "0 18px 18px" }}>
-            <table className="maize-sheet-table">
-              <thead>
-                <tr>
-                  <th className="maize-sheet-sticky">Camp</th>
-                  <th>Farm</th>
-                  <th>Size (ha)</th>
-                  <th>Applications</th>
-                  <th>N kg/ha</th>
-                  <th>P kg/ha</th>
-                  <th>K kg/ha</th>
-                  <th>S kg/ha</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((r) => (
-                  <tr key={r.paddockId}>
-                    <td className="maize-sheet-sticky"><strong>{r.code}</strong></td>
-                    <td>{r.farmName}</td>
-                    <td>{r.sizeHa ?? "—"}</td>
-                    <td>{r.applications}</td>
-                    <td>{r.N || "—"}</td>
-                    <td>{r.P || "—"}</td>
-                    <td>{r.K || "—"}</td>
-                    <td>{r.S || "—"}</td>
-                  </tr>
+              <div className="holistic-summary" style={{ padding: "10px 18px" }}>
+                {NUTRIENTS.map((n) => (
+                  <div key={n}>
+                    <span className="num">{data.avgPerHa[n]}</span>
+                    <span className="lbl">kg {n}/ha — {NUTRIENT_NAME[n]}</span>
+                  </div>
                 ))}
-                {data.rows.length === 0 && (
-                  <tr><td colSpan={8} style={{ textAlign: "center" }}>No camps match this filter.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              {(data.unrecognizedProducts.length > 0 || data.placeholderProducts.length > 0) && (
+                <div className="wedge-info-box" style={{ margin: "0 18px 10px" }}>
+                  {data.unrecognizedProducts.length > 0 && (
+                    <div><span className="wib-k">Unrecognized product{data.unrecognizedProducts.length === 1 ? "" : "s"}</span><span className="wib-v">{data.unrecognizedProducts.join(", ")} — counted as 0 nutrient</span></div>
+                  )}
+                  {data.placeholderProducts.length > 0 && (
+                    <div><span className="wib-k">Placeholder analysis</span><span className="wib-v">{data.placeholderProducts.join(", ")} — real N/P/K/S %s not set in Settings &gt; Fertilizer yet</span></div>
+                  )}
+                </div>
+              )}
+
+              <div className="maize-sheet-scroll" style={{ padding: "0 18px 18px" }}>
+                <table className="maize-sheet-table">
+                  <thead>
+                    <tr>
+                      <th className="maize-sheet-sticky">Camp</th>
+                      <th>Farm</th>
+                      <th>Size (ha)</th>
+                      <th>Applications</th>
+                      <th>N kg/ha</th>
+                      <th>P kg/ha</th>
+                      <th>K kg/ha</th>
+                      <th>S kg/ha</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.rows.map((r) => (
+                      <tr key={r.paddockId}>
+                        <td className="maize-sheet-sticky"><strong>{r.code}</strong></td>
+                        <td>{r.farmName}</td>
+                        <td>{r.sizeHa ?? "—"}</td>
+                        <td>{r.applications}</td>
+                        <td>{r.N || "—"}</td>
+                        <td>{r.P || "—"}</td>
+                        <td>{r.K || "—"}</td>
+                        <td>{r.S || "—"}</td>
+                      </tr>
+                    ))}
+                    {data.rows.length === 0 && (
+                      <tr><td colSpan={8} style={{ textAlign: "center" }}>No camps match this filter.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="field-hint" style={{ padding: "12px 18px 0" }}>
+                Every fertilizer application in this period, most recent first — check camp, product and rate match what was actually put down.
+              </p>
+              <div className="maize-sheet-scroll" style={{ padding: "0 18px 18px" }}>
+                <table className="maize-sheet-table">
+                  <thead>
+                    <tr>
+                      <th className="maize-sheet-sticky">Date</th>
+                      <th>Camp</th>
+                      <th>Farm</th>
+                      <th>Product</th>
+                      <th>Rate (kg/ha)</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.entries.map((e) => (
+                      <tr key={e.id}>
+                        <td className="maize-sheet-sticky">{e.date}</td>
+                        <td><strong>{e.paddockCode}</strong></td>
+                        <td>{e.farmName}</td>
+                        <td>{e.product}</td>
+                        <td>{e.rate}</td>
+                        <td>{e.notes ?? ""}</td>
+                      </tr>
+                    ))}
+                    {data.entries.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: "center" }}>No entries in this period.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -30,7 +30,7 @@ export async function GET(req: Request) {
       type: "FERTILIZER",
       paddockId: { in: [...paddockById.keys()] },
     },
-    select: { paddockId: true, date: true, product: true, rate: true },
+    select: { id: true, paddockId: true, date: true, product: true, rate: true, notes: true },
   });
   const inRange = activities.filter((a) => a.rate && a.product && withinRange(a.date.toISOString(), range));
 
@@ -89,6 +89,26 @@ export async function GET(req: Request) {
   };
   const avgPerHa = { N: weightedAvg("N"), P: weightedAvg("P"), K: weightedAvg("K"), S: weightedAvg("S") };
 
+  // Raw per-application log for the period — lets the actual entries be
+  // checked/confirmed (right camp, right product, right rate) rather than
+  // only the rolled-up NPK totals above, which won't reveal e.g. a product
+  // picked by mistake if its analysis happens to land close to the
+  // intended one's.
+  const entries = inRange
+    .map((a) => {
+      const p = paddockById.get(a.paddockId)!;
+      return {
+        id: a.id,
+        date: a.date.toISOString().slice(0, 10),
+        paddockCode: p.code,
+        farmName: p.farm.name,
+        product: a.product!,
+        rate: a.rate!,
+        notes: a.notes,
+      };
+    })
+    .sort((a, b) => (a.date === b.date ? a.paddockCode.localeCompare(b.paddockCode, undefined, { numeric: true }) : b.date.localeCompare(a.date)));
+
   return NextResponse.json({
     rows,
     totals,
@@ -97,5 +117,6 @@ export async function GET(req: Request) {
     excludedNoSize: rows.length - weighable.length,
     unrecognizedProducts: [...unrecognizedProducts],
     placeholderProducts: [...placeholderProducts],
+    entries,
   });
 }

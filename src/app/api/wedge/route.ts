@@ -44,8 +44,11 @@ export async function GET(req: Request) {
       paddocks: {
         include: {
           pastureWalks: { where: { date: { lte: asOfDate } }, orderBy: { date: "desc" }, take: 2 },
+          // Mowing for bailing cuts the grass same as mulching does — both
+          // reset a paddock's cover and count as "defoliation" for the
+          // wedge, so both feed the one mulchDate/mulchDays figure below.
           fieldActivities: {
-            where: { type: "MULCHING", date: { lte: asOfDate } },
+            where: { type: { in: ["MULCHING", "MOWING"] }, date: { lte: asOfDate } },
             orderBy: { date: "desc" },
             take: 1,
           },
@@ -91,6 +94,8 @@ export async function GET(req: Request) {
       const [latest, prev] = p.pastureWalks;
       const hasData = latest != null && latest.cover > 0;
       const cover = hasData ? latest.cover : null;
+      // Latest mulching OR mowing-for-bailing date — either one counts as
+      // defoliation (see the fieldActivities query above).
       const mulchDate = p.fieldActivities[0]?.date ?? null;
 
       // Past-or-asOf grazing only — a future-dated allocation is a plan,
