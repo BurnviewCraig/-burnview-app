@@ -53,6 +53,12 @@ export const COLORS = {
   mulch: "#8FA84E",
   grown: "#5C86A8",
   trend: "#232A1E",
+  // Wedge bars for a paddock that's grazed recently (last 7 days) or is
+  // already on the grazing allocation calendar — amber rather than the
+  // usual green/blue, so it stands out as "already in/about to be in
+  // rotation" at a glance.
+  recentGraze: "#C9A227",
+  recentGrazeGrown: "#A9841A",
 };
 
 // What can be planted. "High Velt Mix" is a sown seed blend (distinct from

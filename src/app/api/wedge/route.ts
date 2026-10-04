@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { daysBetween } from "@/lib/utils";
+import { daysBetween, todayStr } from "@/lib/utils";
 import { correctedGrowthPerDay } from "@/lib/growthCalc";
 
 export const dynamic = "force-dynamic";
@@ -23,18 +23,36 @@ export const dynamic = "force-dynamic";
 // still gets a spot on the wedge (as a flagged no-data bar, same as a
 // paddock that's never been walked at all) — it just doesn't count toward
 // avgCover/avgGrowth, and growth isn't computed off of it.
-export async function GET() {
+//
+// ?asOf=YYYY-MM-DD (only meaningful combined with ?farmId=) replays the
+// wedge as it would have looked that day — "today" throughout every
+// calculation becomes asOf, and only walks/mulching/grazing on or before
+// that date are considered, so an old wedge reprinted later shows exactly
+// what it showed the day it was actually made, not today's numbers. The
+// no-params / all-farms call (used by the overview cards) always stays
+// live against the real today.
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const farmId = searchParams.get("farmId");
+  const asOf = farmId ? searchParams.get("asOf") || todayStr() : todayStr();
+  const asOfDate = new Date(asOf);
+
   const farms = await prisma.farm.findMany({
+    where: farmId ? { id: farmId } : undefined,
     orderBy: { sortOrder: "asc" },
     include: {
       paddocks: {
         include: {
-          pastureWalks: { orderBy: { date: "desc" }, take: 2 },
+          pastureWalks: { where: { date: { lte: asOfDate } }, orderBy: { date: "desc" }, take: 2 },
           fieldActivities: {
-            where: { type: "MULCHING" },
+            where: { type: "MULCHING", date: { lte: asOfDate } },
             orderBy: { date: "desc" },
             take: 1,
           },
+          // Unfiltered by date — past sessions feed the DM-removed growth
+          // correction and "last grazed", future ones feed the separate
+          // "already on the allocation" flag below; splitting happens in
+          // JS against asOfDate rather than two separate queries.
           grazingAllocations: { orderBy: { date: "desc" } },
         },
       },
@@ -43,8 +61,6 @@ export async function GET() {
       },
     },
   });
-
-  const now = new Date();
 
   const result = farms.map((farm) => {
     // date-sorted headcount history per group, so a grazing event on any
@@ -76,12 +92,20 @@ export async function GET() {
       const hasData = latest != null && latest.cover > 0;
       const cover = hasData ? latest.cover : null;
       const mulchDate = p.fieldActivities[0]?.date ?? null;
+
+      // Past-or-asOf grazing only — a future-dated allocation is a plan,
+      // not something that's actually happened yet, so it must never be
+      // read as "last grazed" (that previously let an upcoming allocation
+      // masquerade as history, with a negative days-since).
+      const pastAllocations = p.grazingAllocations.filter((a) => a.date <= asOfDate);
+      const futureAllocations = p.grazingAllocations.filter((a) => a.date > asOfDate);
+
       let growthPerDay: number | null = null;
       let wasDefoliated = false;
       if (hasData && prev && prev.cover > 0) {
         const days = daysBetween(prev.date, latest.date);
         if (days > 0) {
-          const grazedInWindow = p.grazingAllocations.filter((a) => a.date > prev.date && a.date <= latest.date);
+          const grazedInWindow = pastAllocations.filter((a) => a.date > prev.date && a.date <= latest.date);
           const mulchedInWindow = mulchDate != null && mulchDate > prev.date && mulchDate <= latest.date;
           wasDefoliated = grazedInWindow.length > 0 || mulchedInWindow;
           if (p.sizeHa) {
@@ -98,11 +122,17 @@ export async function GET() {
           }
         }
       }
-      const mulchDays = mulchDate ? daysBetween(mulchDate, now) : null;
-      const grazeDate = p.grazingAllocations[0]?.date ?? null;
-      const grazeDays = grazeDate ? daysBetween(grazeDate, now) : null;
+      const mulchDays = mulchDate ? daysBetween(mulchDate, asOfDate) : null;
+      const grazeDate = pastAllocations[0]?.date ?? null;
+      const grazeDays = grazeDate ? daysBetween(grazeDate, asOfDate) : null;
       const daysSinceDefoliation =
         mulchDays == null ? grazeDays : grazeDays == null ? mulchDays : Math.min(mulchDays, grazeDays);
+      // Already scheduled to be grazed (on the grazing allocation calendar,
+      // which only ever plans a few days out) — flagged separately from
+      // recentlyGrazed (grazeDays 0-7) so the wedge page can highlight both
+      // "just came out of rotation" and "about to go into it" the same way.
+      const upcomingAllocation = futureAllocations.length > 0;
+
       return {
         id: p.id,
         code: p.code,
@@ -116,6 +146,7 @@ export async function GET() {
         mulchDays,
         grazeDays,
         daysSinceDefoliation,
+        upcomingAllocation,
         walkDate: latest ? latest.date.toISOString().slice(0, 10) : null,
         boundary: p.boundary,
       };

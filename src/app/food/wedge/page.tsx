@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { X, Footprints, ChevronRight, Printer } from "lucide-react";
+import { X, Footprints, ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import {
   BarChart, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Cell, ReferenceLine, LabelList,
 } from "recharts";
@@ -25,6 +25,57 @@ function CoverLabel({ x, y, width, value }: { x?: string | number; y?: string | 
     <text x={cx} y={cy} textAnchor="start" fontSize={8} fill={COLORS.inkSoft} transform={`rotate(-90 ${cx} ${cy})`}>
       {value}
     </text>
+  );
+}
+
+// A paddock grazed in the last week, or already scheduled on the grazing
+// allocation calendar, gets a different wedge colour so it reads at a
+// glance as "already in (or about to go into) rotation".
+function isRecentOrUpcoming(p: Row): boolean {
+  return (p.grazeDays != null && p.grazeDays >= 0 && p.grazeDays <= 7) || p.upcomingAllocation;
+}
+
+const tooltipBoxStyle: CSSProperties = {
+  fontSize: 11,
+  background: COLORS.card,
+  border: `1px solid ${COLORS.paperDeep}`,
+  borderRadius: 4,
+  padding: "6px 10px",
+};
+
+// Custom tooltip content, not Tooltip's formatter — a ComposedChart's
+// tooltip payload includes every series plotted at that x (greenCover,
+// blueCover, AND the trend Line), so the old formatter's fallback
+// ("anything that isn't greenCover is Growth since") mislabeled the
+// trend line's own value as a second, bogus "Growth since" row. This
+// picks the two real series out explicitly instead. Also shows the
+// paddock's code, not Recharts' default label (the hidden XAxis uses the
+// row's raw id for stable charting, which isn't meant for display).
+function CoverTooltip({ active, payload }: { active?: boolean; payload?: { dataKey?: string; value?: number; payload?: Row }[] }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  const green = payload.find((p) => p.dataKey === "greenCover")?.value;
+  const blue = payload.find((p) => p.dataKey === "blueCover")?.value;
+  return (
+    <div style={tooltipBoxStyle}>
+      <div style={{ fontWeight: 600, marginBottom: 2 }}>{row.code}</div>
+      {green != null && <div>Last week: {green}</div>}
+      {blue != null && blue > 0 && <div>Growth since: {blue}</div>}
+    </div>
+  );
+}
+
+function DefoliationTooltip({ active, payload }: { active?: boolean; payload?: { payload?: Row }[] }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  const v = row.daysSinceDefoliation;
+  return (
+    <div style={tooltipBoxStyle}>
+      <div style={{ fontWeight: 600, marginBottom: 2 }}>{row.code}</div>
+      <div>{v == null ? "Never logged" : `${v} day${v === 1 ? "" : "s"} since defoliation`}</div>
+    </div>
   );
 }
 
@@ -57,23 +108,19 @@ function WedgeCharts({
       <ComposedChart width={width} height={230} data={sorted} margin={{ top: 50, right: CHART_RIGHT_MARGIN, left: 0, bottom: 0 }}>
         <XAxis dataKey="id" hide />
         <YAxis width={CHART_Y_AXIS_WIDTH} tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Cover kg DM/ha", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
-        <Tooltip
-          formatter={(v: number, name: string) => [v, name === "greenCover" ? "Last week" : "Growth since"]}
-          labelFormatter={(code) => code}
-          contentStyle={{ fontSize: 11, background: COLORS.card, border: `1px solid ${COLORS.paperDeep}` }}
-        />
+        <Tooltip content={<CoverTooltip />} />
         <Bar dataKey="greenCover" stackId="cover" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined}>
           {sorted.map((p) => (
-            <Cell key={p.id} fill={COLORS.normal} opacity={selectedId === p.id ? 1 : 0.92} />
+            <Cell key={p.id} fill={isRecentOrUpcoming(p) ? COLORS.recentGraze : COLORS.normal} opacity={selectedId === p.id ? 1 : 0.92} />
           ))}
         </Bar>
         <Bar dataKey="blueCover" stackId="cover" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined}>
           {sorted.map((p) => (
-            <Cell key={p.id} fill={COLORS.grown} opacity={selectedId === p.id ? 1 : 0.92} />
+            <Cell key={p.id} fill={isRecentOrUpcoming(p) ? COLORS.recentGrazeGrown : COLORS.grown} opacity={selectedId === p.id ? 1 : 0.92} />
           ))}
           <LabelList dataKey="cover" content={CoverLabel} />
         </Bar>
-        <Line type="linear" dataKey="trend" stroke={COLORS.trend} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+        <Line type="linear" dataKey="trend" stroke={COLORS.trend} strokeWidth={1.5} dot={false} isAnimationActive={false} legendType="none" />
       </ComposedChart>
 
       <div className="wedge-axis-labels" style={{ width, paddingLeft: CHART_Y_AXIS_WIDTH, paddingRight: CHART_RIGHT_MARGIN, boxSizing: "border-box" }}>
@@ -92,18 +139,40 @@ function WedgeCharts({
       <BarChart width={width} height={120} data={sorted} margin={{ top: 0, right: CHART_RIGHT_MARGIN, left: 0, bottom: 0 }}>
         <XAxis dataKey="id" hide />
         <YAxis width={CHART_Y_AXIS_WIDTH} reversed tick={{ fontSize: 9, fill: COLORS.inkSoft }} label={{ value: "Days since defoliation", angle: -90, position: "insideLeft", fontSize: 9, fill: COLORS.inkSoft }} />
-        <Tooltip
-          formatter={(v: number) => [v == null ? "Never logged" : `${v} days`, "Since defoliation"]}
-          labelFormatter={(code) => code}
-          contentStyle={{ fontSize: 11, background: COLORS.card, border: `1px solid ${COLORS.paperDeep}` }}
-        />
+        <Tooltip content={<DefoliationTooltip />} />
         {avgMulch != null && (
           <ReferenceLine y={avgMulch} stroke="#B5533C" strokeDasharray="4 3" label={{ value: `Avg ${avgMulch}d`, position: "insideBottomRight", fontSize: 9, fill: "#B5533C" }} />
         )}
-        <Bar dataKey="daysSinceDefoliation" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined} fill={COLORS.mulch} radius={[0, 0, 2, 2]} />
+        <Bar dataKey="daysSinceDefoliation" onClick={onBarClick ? (d) => onBarClick(d as unknown as Row) : undefined} cursor={onBarClick ? "pointer" : undefined} radius={[0, 0, 2, 2]}>
+          {sorted.map((p) => (
+            <Cell key={p.id} fill={isRecentOrUpcoming(p) ? COLORS.recentGraze : COLORS.mulch} />
+          ))}
+        </Bar>
       </BarChart>
     </>
   );
+}
+
+// The API's own paddockCount/noDataCount/avgCover/avgGrowth cover every
+// land type (the farm map reads those same fields, so they must stay
+// unfiltered) — the wedge only cares about Rye grass, so its summary
+// numbers are recomputed here from the Rye grass subset only. Shared by
+// the "All farms" overview cards (always live/today) and the per-farm
+// detail box (which may be viewing an older wedge via asOf).
+function ryeGrassStats(f: WedgeFarm) {
+  const rye = f.paddocks.filter(isMeasuredRyeGrass);
+  const withData = rye.filter((p) => p.hasData);
+  const avgCover = withData.length
+    ? Math.round(withData.reduce((s, p) => s + (p.cover ?? 0), 0) / withData.length)
+    : null;
+  // Area-weighted, same reasoning as the API's farm-wide figure — a
+  // bigger paddock represents more of the farm's actual DM growth.
+  const withGrowth = rye.filter((p) => p.growthPerDay != null && p.sizeHa);
+  const growthArea = withGrowth.reduce((s, p) => s + (p.sizeHa ?? 0), 0);
+  const avgGrowth = growthArea
+    ? Math.round((withGrowth.reduce((s, p) => s + (p.growthPerDay ?? 0) * (p.sizeHa ?? 0), 0) / growthArea) * 10) / 10
+    : null;
+  return { paddockCount: rye.length, noDataCount: rye.length - withData.length, avgCover, avgGrowth };
 }
 
 export default function FarmWedgePage() {
@@ -112,32 +181,38 @@ export default function FarmWedgePage() {
   const [activeFarmId, setActiveFarmId] = useState<string | "all">("all");
   const [selected, setSelected] = useState<Row | null>(null);
 
-  const current = activeFarmId === "all" ? null : farms.find((f) => f.id === activeFarmId) ?? null;
-
-  // The API's own paddockCount/noDataCount/avgCover/avgGrowth cover every
-  // land type (the farm map reads those same fields, so they must stay
-  // unfiltered) — the wedge only cares about Rye grass, so its summary
-  // numbers are recomputed here from the Rye grass subset only.
-  const farmsWithStats = useMemo(
-    () =>
-      farms.map((f) => {
-        const rye = f.paddocks.filter(isMeasuredRyeGrass);
-        const withData = rye.filter((p) => p.hasData);
-        const avgCover = withData.length
-          ? Math.round(withData.reduce((s, p) => s + (p.cover ?? 0), 0) / withData.length)
-          : null;
-        // Area-weighted, same reasoning as the API's farm-wide figure — a
-        // bigger paddock represents more of the farm's actual DM growth.
-        const withGrowth = rye.filter((p) => p.growthPerDay != null && p.sizeHa);
-        const growthArea = withGrowth.reduce((s, p) => s + (p.sizeHa ?? 0), 0);
-        const avgGrowth = growthArea
-          ? Math.round((withGrowth.reduce((s, p) => s + (p.growthPerDay ?? 0) * (p.sizeHa ?? 0), 0) / growthArea) * 10) / 10
-          : null;
-        return { farm: f, stats: { paddockCount: rye.length, noDataCount: rye.length - withData.length, avgCover, avgGrowth } };
-      }),
-    [farms]
+  // Which day's wedge is being viewed — null means "the latest walk
+  // session" (tracks forward automatically as new walks come in); set
+  // explicitly only once the user steps back to an older one. Stepping
+  // is through actual walk-session dates (see /api/wedge/sessions), not
+  // raw calendar days, since most days have no new walk at all.
+  const [asOfOverride, setAsOfOverride] = useState<string | null>(null);
+  const { data: sessionsData } = useApi<{ dates: string[] }>(
+    activeFarmId !== "all" ? `/api/wedge/sessions?farmId=${activeFarmId}` : null
   );
-  const currentStats = farmsWithStats.find((x) => x.farm.id === current?.id)?.stats ?? null;
+  const sessions = sessionsData?.dates ?? [];
+  const asOf = asOfOverride ?? sessions[0] ?? todayStr();
+  const sessionIndex = sessions.indexOf(asOf);
+  const canStepOlder = sessionIndex !== -1 && sessionIndex < sessions.length - 1;
+  const canStepNewer = sessionIndex > 0;
+  const isLatestSession = asOfOverride == null || sessionIndex <= 0;
+
+  const { data: detailData } = useApi<{ farms: WedgeFarm[] }>(
+    activeFarmId !== "all" ? `/api/wedge?farmId=${activeFarmId}&asOf=${asOf}` : null
+  );
+  const current = detailData?.farms?.[0] ?? null;
+
+  const switchFarm = (id: string | "all") => {
+    setActiveFarmId(id);
+    setAsOfOverride(null);
+    setSelected(null);
+  };
+  const stepOlder = () => { if (canStepOlder) { setAsOfOverride(sessions[sessionIndex + 1]); setSelected(null); } };
+  const stepNewer = () => { if (canStepNewer) { setAsOfOverride(sessions[sessionIndex - 1]); setSelected(null); } };
+  const jumpToLatest = () => { setAsOfOverride(null); setSelected(null); };
+
+  const farmsWithStats = useMemo(() => farms.map((f) => ({ farm: f, stats: ryeGrassStats(f) })), [farms]);
+  const currentStats = current ? ryeGrassStats(current) : null;
 
   const totalPaddocks = farmsWithStats.reduce((s, x) => s + x.stats.paddockCount, 0);
   const totalNoData = farmsWithStats.reduce((s, x) => s + x.stats.noDataCount, 0);
@@ -235,9 +310,9 @@ export default function FarmWedgePage() {
       />
 
       <div className="tabs no-print">
-        <button className={`tab${activeFarmId === "all" ? " active" : ""}`} onClick={() => { setActiveFarmId("all"); setSelected(null); }}>All farms</button>
+        <button className={`tab${activeFarmId === "all" ? " active" : ""}`} onClick={() => switchFarm("all")}>All farms</button>
         {farms.map((f) => (
-          <button key={f.id} className={`tab${activeFarmId === f.id ? " active" : ""}`} onClick={() => { setActiveFarmId(f.id); setSelected(null); }}>{f.name}</button>
+          <button key={f.id} className={`tab${activeFarmId === f.id ? " active" : ""}`} onClick={() => switchFarm(f.id)}>{f.name}</button>
         ))}
       </div>
 
@@ -251,7 +326,7 @@ export default function FarmWedgePage() {
           </div>
           <div className="farm-cards">
             {farmsWithStats.map(({ farm: f, stats }) => (
-              <button key={f.id} className="farm-card" onClick={() => setActiveFarmId(f.id)}>
+              <button key={f.id} className="farm-card" onClick={() => switchFarm(f.id)}>
                 <div className="fc-top"><span className="fc-name">{f.name}</span><ChevronRight size={16} /></div>
                 <div className="fc-stats">
                   <div><span className="num">{stats.avgCover ?? "—"}</span><span className="lbl">avg cover</span></div>
@@ -268,7 +343,15 @@ export default function FarmWedgePage() {
       {current && (
         <div className="farm-detail">
           <div className="wedge-header-row no-print">
-            <span />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="map-zoom-btn" onClick={stepOlder} disabled={!canStepOlder} aria-label="Older wedge"><ChevronLeft size={16} /></button>
+              <span className="mr-sub">
+                {sessions.length === 0 ? "No walks yet" : `Wedge from ${asOf}`}
+                {!isLatestSession ? " (older)" : ""}
+              </span>
+              <button className="map-zoom-btn" onClick={stepNewer} disabled={!canStepNewer} aria-label="Newer wedge"><ChevronRight size={16} /></button>
+              {!isLatestSession && <button className="link-btn" onClick={jumpToLatest}>Latest</button>}
+            </div>
             <button className="link-btn" onClick={() => window.print()}>
               <Printer size={14} style={{ verticalAlign: "-2px" }} /> Print
             </button>
@@ -284,6 +367,7 @@ export default function FarmWedgePage() {
           <div className="wedge-legend">
             <div><span className="wedge-swatch" style={{ background: COLORS.normal }} />Last week&apos;s cover</div>
             <div><span className="wedge-swatch" style={{ background: COLORS.grown }} />Growth since</div>
+            <div><span className="wedge-swatch" style={{ background: COLORS.recentGraze }} />Grazed last 7 days / on allocation</div>
             <div><span className="wedge-swatch line" />Trend</div>
           </div>
 
@@ -298,7 +382,7 @@ export default function FarmWedgePage() {
               </div>
 
               <div className="print-only wedge-print">
-                <p className="timebook-title-print">{current.name} — Farm wedge — {todayStr()}</p>
+                <p className="timebook-title-print">{current.name} — Farm wedge — {asOf}</p>
                 <div style={{ width: PRINT_CHART_WIDTH }}>
                   <WedgeCharts width={PRINT_CHART_WIDTH} sorted={sorted} avgMulch={avgMulch} />
                 </div>
@@ -327,6 +411,7 @@ export default function FarmWedgePage() {
               <div><div className="k">Growth</div><div className="v">{selected.growthPerDay != null ? `${selected.growthPerDay.toFixed(1)} kg DM/ha/day` : "Not enough data yet"}</div></div>
               <div><div className="k">Last walked</div><div className="v">{selected.walkDate}</div></div>
               <div><div className="k">Mulched</div><div className="v">{selected.mulchDays != null ? `${selected.mulchDays} days ago` : "Never logged"}</div></div>
+              <div><div className="k">Grazing</div><div className="v">{selected.upcomingAllocation ? "Scheduled soon" : selected.grazeDays != null ? `${selected.grazeDays} days ago` : "Not recently"}</div></div>
             </div>
           ) : (
             <p className="ds-note">No pasture walk recorded for this paddock yet.</p>
