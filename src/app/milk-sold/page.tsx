@@ -8,7 +8,10 @@ import { Spinner } from "@/components/Spinner";
 import { TrendChart, type ChartRange } from "@/components/TrendChart";
 import { useApi } from "@/lib/useApi";
 import { todayStr, sanitizeDecimalInput } from "@/lib/utils";
+import { addDays } from "@/lib/calendarFormat";
 import type { Farm, MilkSaleEntry } from "@/lib/types";
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -48,7 +51,18 @@ function MilkSoldForm() {
     return [...byDate.entries()].map(([d, value]) => ({ date: d, value: Math.round(value * 10) / 10 }));
   }, [entries]);
 
-  const monthComparison = useMemo(() => {
+  // The old "Change %" here compared this month's running total against
+  // LAST month's full total — early in a month that's a handful of days
+  // against a complete 30, so it always read as a huge, meaningless drop
+  // (e.g. -97% a few days into a new month) rather than any real trend.
+  // Replaced with two fair, equal-length comparisons instead: a daily
+  // average (this month's total spread over every day elapsed so far,
+  // including days with nothing logged yet — not just days with an
+  // entry, so it doesn't inflate early in the month) and a rolling 7-day
+  // average, colour-coded against the 7 days before that.
+  const stats = useMemo(() => {
+    const byDate = new Map(dailyTotals.map((p) => [p.date, p.value]));
+    const today = todayStr();
     const now = new Date();
     const thisMonth = monthKey(now);
     const lastMonth = monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1));
@@ -59,10 +73,22 @@ function MilkSoldForm() {
       if (m === thisMonth) thisTotal += p.value;
       else if (m === lastMonth) lastTotal += p.value;
     });
-    thisTotal = Math.round(thisTotal * 10) / 10;
-    lastTotal = Math.round(lastTotal * 10) / 10;
-    const pct = lastTotal > 0 ? Math.round(((thisTotal - lastTotal) / lastTotal) * 100) : null;
-    return { thisTotal, lastTotal, pct };
+    thisTotal = round1(thisTotal);
+    lastTotal = round1(lastTotal);
+
+    const elapsedDaysThisMonth = now.getDate();
+    const dailyAvg = elapsedDaysThisMonth > 0 ? round1(thisTotal / elapsedDaysThisMonth) : null;
+
+    const sumDaysBack = (startOffset: number, endOffset: number) => {
+      let sum = 0;
+      for (let i = startOffset; i <= endOffset; i++) sum += byDate.get(addDays(today, -i)) ?? 0;
+      return sum;
+    };
+    const last7Avg = round1(sumDaysBack(0, 6) / 7);
+    const prev7Avg = round1(sumDaysBack(7, 13) / 7);
+    const trend: "up" | "down" | null = prev7Avg === 0 ? null : last7Avg > prev7Avg ? "up" : last7Avg < prev7Avg ? "down" : null;
+
+    return { thisTotal, lastTotal, dailyAvg, last7Avg, trend };
   }, [dailyTotals]);
 
   const resetForm = () => {
@@ -129,11 +155,15 @@ function MilkSoldForm() {
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         <p className="field-hint" style={{ padding: "12px 18px 0", margin: 0 }}>{showingAll ? "Business" : farm.name} total</p>
         <div className="wedge-info-box" style={{ margin: "6px 18px 0" }}>
-          <div><span className="wib-k">This month</span><span className="wib-v">{monthComparison.thisTotal}L</span></div>
-          <div><span className="wib-k">Last month</span><span className="wib-v">{monthComparison.lastTotal}L</span></div>
-          {monthComparison.pct != null && (
-            <div><span className="wib-k">Change</span><span className="wib-v">{monthComparison.pct > 0 ? "+" : ""}{monthComparison.pct}%</span></div>
-          )}
+          <div><span className="wib-k">This month</span><span className="wib-v">{stats.thisTotal}L</span></div>
+          <div><span className="wib-k">Last month</span><span className="wib-v">{stats.lastTotal}L</span></div>
+          <div><span className="wib-k">Daily avg (this month)</span><span className="wib-v">{stats.dailyAvg ?? "—"}L</span></div>
+          <div>
+            <span className="wib-k">Avg last 7 days</span>
+            <span className={`wib-v cgb-variation${stats.trend ? ` ${stats.trend}` : ""}`}>
+              {stats.trend === "up" ? "▲ " : stats.trend === "down" ? "▼ " : ""}{stats.last7Avg}L
+            </span>
+          </div>
         </div>
 
         <div style={{ padding: "12px 18px 0" }}>
