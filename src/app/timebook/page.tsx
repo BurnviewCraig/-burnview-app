@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckSquare, ChevronLeft, ChevronRight, Plus, Printer, RotateCcw, Trash2, X } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
+import { useAccess } from "@/lib/useAccess";
 import { todayStr } from "@/lib/utils";
 import { addDays } from "@/lib/calendarFormat";
 import { TIMEBOOK_SECTIONS, ATTENDANCE_CODES, ATTENDANCE_LETTER } from "@/lib/constants";
@@ -40,8 +42,10 @@ type CellTarget = { workerId: string; workerName: string; date: string; code: Ti
 export default function TimeBookPage() {
   const { data: farmsData, loading } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
+  const { loading: accessLoading, canSeeTimebookFarm } = useAccess();
+  const visibleFarms = farms.filter((f) => canSeeTimebookFarm(f.slug));
   const [farmId, setFarmId] = useState<string | null>(null);
-  const farm = farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0];
+  const farm = visibleFarms.find((f) => f.id === (farmId ?? visibleFarms[0]?.id)) ?? visibleFarms[0];
 
   const [section, setSection] = useState<Section>("DAIRY");
 
@@ -227,8 +231,20 @@ export default function TimeBookPage() {
     refetchRemoved();
   };
 
-  if (loading) return <div className="screen"><Header title="Time book" backHref="/" /><Spinner /></div>;
-  if (!farm) return <div className="screen"><Header title="Time book" backHref="/" /><div className="empty">No farms found.</div></div>;
+  if (loading || accessLoading) return <div className="screen"><Header title="Time book" backHref="/" /><Spinner /></div>;
+  if (!farms.length) return <div className="screen"><Header title="Time book" backHref="/" /><div className="empty">No farms found.</div></div>;
+  if (!farm) {
+    return (
+      <div className="screen">
+        <Header title="Time book" backHref="/" />
+        <div className="empty" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, paddingTop: 40 }}>
+          <ShieldAlert size={28} strokeWidth={1.5} />
+          <span>Restricted access</span>
+          <span className="hc-sub">Ask Craig if you need access to this.</span>
+        </div>
+      </div>
+    );
+  }
 
   const sectionName = TIMEBOOK_SECTIONS.find((s) => s.id === section)?.name ?? section;
 
@@ -237,7 +253,7 @@ export default function TimeBookPage() {
       <Header title="Time book" backHref="/" />
 
       <div className="tabs no-print">
-        {farms.map((f) => (
+        {visibleFarms.map((f) => (
           <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => switchFarm(f.id)}>{f.name}</button>
         ))}
       </div>

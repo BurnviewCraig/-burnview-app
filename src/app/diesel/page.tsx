@@ -6,6 +6,7 @@ import Link from "next/link";
 import { X, Plus, Trash2, History, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Pencil } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
+import { AccessGate } from "@/components/AccessGate";
 import { useApi } from "@/lib/useApi";
 import { byPaddockNumber, todayStr, sanitizeDecimalInput } from "@/lib/utils";
 import { addDays } from "@/lib/calendarFormat";
@@ -13,6 +14,14 @@ import { computeDieselByDate } from "@/lib/dieselCalc";
 import type { Farm, DieselAsset, DieselLogEntry, DieselActivityType, Worker } from "@/lib/types";
 
 export default function DieselPage() {
+  return (
+    <AccessGate section="diesel" title="Diesel">
+      <DieselPageInner />
+    </AccessGate>
+  );
+}
+
+function DieselPageInner() {
   const { data: farmsData, loading } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
   const [farmId, setFarmId] = useState<string | null>(null);

@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Wheat, Boxes, Syringe, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
+import { AccessGate } from "@/components/AccessGate";
 
 export default function StocksPage() {
   return (
+    <AccessGate section="stocks" title="Stocks">
     <div className="screen">
       <Header title="Stocks" backHref="/" />
       <div className="menu-list">
@@ -33,5 +35,6 @@ export default function StocksPage() {
         </Link>
       </div>
     </div>
+    </AccessGate>
   );
 }

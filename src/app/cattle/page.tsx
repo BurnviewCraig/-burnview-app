@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Utensils, ChevronRight, Milk } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
+import { AccessGate } from "@/components/AccessGate";
 import { TrendChart, type ChartRange } from "@/components/TrendChart";
 import { useApi } from "@/lib/useApi";
 import type { Farm, CattleGroup, CattleSummary } from "@/lib/types";
@@ -59,6 +60,14 @@ function SummaryPanel({ farmId, label }: { farmId: string | null; label: string 
 }
 
 export default function CattlePage() {
+  return (
+    <AccessGate section="cattle" title="Cattle">
+      <CattlePageInner />
+    </AccessGate>
+  );
+}
+
+function CattlePageInner() {
   const { data: farmsData, loading } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
   const [farmId, setFarmId] = useState<string | null>(null);

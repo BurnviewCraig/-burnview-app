@@ -8,11 +8,16 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  name         String
-  passwordHash String
-  createdAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  username       String   @unique
+  name           String
+  passwordHash   String
+  createdAt      DateTime @default(now())
+  isAdmin        Boolean  @default(false)
+  // Null means full access (grandfathers in existing/newly created users).
+  // Once an admin edits a user's access it becomes a concrete object —
+  // see src/lib/permissions.ts for the shape and the access check.
+  sectionAccess  Json?
 
   fieldActivities FieldActivity[]
   pastureWalks    PastureWalk[]

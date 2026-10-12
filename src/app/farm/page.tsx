@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Map as MapIcon, ClipboardList, Pencil, CloudRain, Wheat, BarChart3, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
+import { AccessGate } from "@/components/AccessGate";
 
 export default function FarmPage() {
   return (
+    <AccessGate section="farm" title="Farm">
     <div className="screen">
       <Header title="Farm" backHref="/" />
       <div className="menu-list">
@@ -57,5 +59,6 @@ export default function FarmPage() {
         </Link>
       </div>
     </div>
+    </AccessGate>
   );
 }

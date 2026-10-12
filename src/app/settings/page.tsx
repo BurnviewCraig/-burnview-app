@@ -1,20 +1,26 @@
+"use client";
+
 import Link from "next/link";
 import { Users, Sprout, FlaskConical, Leaf, Fuel, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
+import { useAccess } from "@/lib/useAccess";
 
 export default function SettingsPage() {
+  const { isAdmin } = useAccess();
   return (
     <div className="screen">
       <Header title="Settings" backHref="/" />
       <div className="menu-list">
-        <Link className="menu-row" href="/settings/users">
-          <Users size={18} strokeWidth={1.75} />
-          <div className="menu-row-text">
-            <span className="mr-title">Users</span>
-            <span className="mr-sub">Add accounts for workers entering data</span>
-          </div>
-          <ChevronRight size={16} />
-        </Link>
+        {isAdmin && (
+          <Link className="menu-row" href="/settings/users">
+            <Users size={18} strokeWidth={1.75} />
+            <div className="menu-row-text">
+              <span className="mr-title">Users</span>
+              <span className="mr-sub">Add accounts, set passwords &amp; permissions</span>
+            </div>
+            <ChevronRight size={16} />
+          </Link>
+        )}
         <Link className="menu-row" href="/settings/fertilizer">
           <Sprout size={18} strokeWidth={1.75} />
           <div className="menu-row-text">

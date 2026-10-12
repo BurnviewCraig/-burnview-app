@@ -4,11 +4,20 @@ import { useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
+import { AccessGate } from "@/components/AccessGate";
 import { useApi } from "@/lib/useApi";
 import { ORDER_NUMBER_ISSUERS } from "@/lib/constants";
 import type { Farm, OrderNumber } from "@/lib/types";
 
 export default function OrderNumbersPage() {
+  return (
+    <AccessGate section="orderNumbers" title="Order numbers">
+      <OrderNumbersPageInner />
+    </AccessGate>
+  );
+}
+
+function OrderNumbersPageInner() {
   const { data, loading, error, refetch } = useApi<{ orderNumbers: OrderNumber[] }>("/api/order-numbers");
   const allOrderNumbers = data?.orderNumbers ?? [];
   const { data: farmsData } = useApi<{ farms: Farm[] }>("/api/farms");

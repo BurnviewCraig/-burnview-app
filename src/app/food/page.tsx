@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { CalendarRange, Layers, Wheat, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
+import { AccessGate } from "@/components/AccessGate";
 
 export default function FoodPage() {
   return (
+    <AccessGate section="food" title="Grass">
     <div className="screen">
       <Header title="Grass" backHref="/" />
       <div className="menu-list">
@@ -32,5 +34,6 @@ export default function FoodPage() {
         </div>
       </div>
     </div>
+    </AccessGate>
   );
 }
