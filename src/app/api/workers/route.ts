@@ -21,10 +21,11 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { farmId, section, name, role, notes } = body as {
+  const { farmId, section, name, employeeCode, role, notes } = body as {
     farmId?: string;
     section?: string;
     name?: string;
+    employeeCode?: string;
     role?: string;
     notes?: string;
   };
@@ -36,6 +37,7 @@ export async function POST(req: Request) {
       farmId,
       section: section as "DAIRY" | "STAFF" | "TOGH" | "HAYDEN",
       name: name.trim(),
+      employeeCode: employeeCode?.trim() || null,
       role: role?.trim() || null,
       notes: notes?.trim() || null,
     },

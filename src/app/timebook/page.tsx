@@ -9,9 +9,13 @@ import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { addDays } from "@/lib/calendarFormat";
 import { TIMEBOOK_SECTIONS, ATTENDANCE_CODES, ATTENDANCE_LETTER } from "@/lib/constants";
+import { isOvertimePremiumDay } from "@/lib/publicHolidays";
 import type { Farm, Worker, TimeBookEntry } from "@/lib/types";
 
 type Section = "DAIRY" | "STAFF" | "TOGH" | "HAYDEN";
+
+// Codes worth a visual flag at a glance, on screen and when printed.
+const FLAGGED_CODES = new Set(["SICK", "ABSENT", "INJURED_ON_DUTY"]);
 
 function mondayOf(dateStr: string): string {
   const dow = new Date(dateStr + "T00:00:00Z").getUTCDay(); // 0=Sun..6=Sat
@@ -68,6 +72,7 @@ export default function TimeBookPage() {
   const [managingWorker, setManagingWorker] = useState<Worker | null>(null);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newEmployeeCode, setNewEmployeeCode] = useState("");
   const [newRole, setNewRole] = useState("");
   const [showRemoved, setShowRemoved] = useState(false);
 
@@ -81,9 +86,17 @@ export default function TimeBookPage() {
   const [printData, setPrintData] = useState<{ from: string; to: string; entries: TimeBookEntry[] } | null>(null);
   const [printLoading, setPrintLoading] = useState(false);
 
+  // Separate from the print range — e.g. print just this week's grid but
+  // still want a whole month's overtime totalled at the end.
+  const [otFrom, setOtFrom] = useState(anchor);
+  const [otTo, setOtTo] = useState(days[6]);
+  const [otEntries, setOtEntries] = useState<TimeBookEntry[] | null>(null);
+
   useEffect(() => {
     setPrintFrom(anchor);
     setPrintTo(days[6]);
+    setOtFrom(anchor);
+    setOtTo(days[6]);
   }, [anchor, days]);
 
   const printDays = useMemo(() => (printData ? daysBetween(printData.from, printData.to) : []), [printData]);
@@ -96,11 +109,38 @@ export default function TimeBookPage() {
   const handlePrint = async () => {
     if (!farm || !printFrom || !printTo || printFrom > printTo) return;
     setPrintLoading(true);
-    const res = await fetch(`/api/timebook-entries?farmId=${farm.id}&section=${section}&start=${printFrom}&end=${printTo}`);
-    const json = await res.json();
+    const [gridRes, otRes] = await Promise.all([
+      fetch(`/api/timebook-entries?farmId=${farm.id}&section=${section}&start=${printFrom}&end=${printTo}`),
+      otFrom && otTo && otFrom <= otTo
+        ? fetch(`/api/timebook-entries?farmId=${farm.id}&section=${section}&start=${otFrom}&end=${otTo}`)
+        : Promise.resolve(null),
+    ]);
+    const gridJson = await gridRes.json();
+    const otJson = otRes ? await otRes.json() : { entries: [] };
     setPrintLoading(false);
-    setPrintData({ from: printFrom, to: printTo, entries: json.entries ?? [] });
+    setPrintData({ from: printFrom, to: printTo, entries: gridJson.entries ?? [] });
+    setOtEntries(otJson.entries ?? []);
   };
+
+  // Overtime notes are free text ("+2", "-1.5") — only ever summed when
+  // they actually parse as a number; a non-numeric note just isn't
+  // counted rather than breaking the total. Sunday and public holidays
+  // get their own column since SA labour law pays those at a different
+  // overtime rate than an ordinary Mon-Sat overtime hour.
+  const overtimeSummary = useMemo(() => {
+    if (!otEntries) return null;
+    const byWorker = new Map<string, { name: string; normal: number; premium: number }>();
+    for (const w of workers) byWorker.set(w.id, { name: w.name, normal: 0, premium: 0 });
+    for (const e of otEntries) {
+      const n = parseFloat(e.overtime ?? "");
+      if (!e.overtime || Number.isNaN(n)) continue;
+      const row = byWorker.get(e.workerId);
+      if (!row) continue;
+      if (isOvertimePremiumDay(e.date.slice(0, 10))) row.premium += n;
+      else row.normal += n;
+    }
+    return [...byWorker.values()].filter((r) => r.normal !== 0 || r.premium !== 0);
+  }, [otEntries, workers]);
 
   useEffect(() => {
     if (!printData) return;
@@ -168,9 +208,10 @@ export default function TimeBookPage() {
     await fetch("/api/workers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ farmId: farm.id, section, name: newName.trim(), role: newRole.trim() || undefined }),
+      body: JSON.stringify({ farmId: farm.id, section, name: newName.trim(), employeeCode: newEmployeeCode.trim() || undefined, role: newRole.trim() || undefined }),
     });
     setNewName("");
+    setNewEmployeeCode("");
     setNewRole("");
     setAdding(false);
     refetchWorkers();
@@ -243,6 +284,13 @@ export default function TimeBookPage() {
         <input className="field-input small" type="date" value={printFrom} onChange={(e) => setPrintFrom(e.target.value)} />
         <span>to</span>
         <input className="field-input small" type="date" value={printTo} onChange={(e) => setPrintTo(e.target.value)} />
+      </div>
+
+      <div className="add-item-bar no-print" style={{ flexWrap: "wrap" }}>
+        <span className="field-label" style={{ width: "100%" }}>Overtime total range (can differ from print range)</span>
+        <input className="field-input small" type="date" value={otFrom} onChange={(e) => setOtFrom(e.target.value)} />
+        <span>to</span>
+        <input className="field-input small" type="date" value={otTo} onChange={(e) => setOtTo(e.target.value)} />
         <button className="save-btn small" onClick={handlePrint} disabled={printLoading || !printFrom || !printTo || printFrom > printTo}>
           <Printer size={14} style={{ verticalAlign: "-2px" }} /> {printLoading ? "Loading…" : "Print"}
         </button>
@@ -251,6 +299,7 @@ export default function TimeBookPage() {
       {adding && (
         <div className="add-item-bar no-print">
           <input className="field-input small" placeholder="Worker name" value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus />
+          <input className="field-input small" placeholder="Employee code" value={newEmployeeCode} onChange={(e) => setNewEmployeeCode(e.target.value)} style={{ width: 110 }} />
           <input className="field-input small" placeholder="Role (what they do)" value={newRole} onChange={(e) => setNewRole(e.target.value)} />
           <button className="save-btn small" onClick={handleAddWorker} disabled={!newName.trim()}>Add</button>
         </div>
@@ -296,6 +345,7 @@ export default function TimeBookPage() {
                     onClick={() => (selectMode ? toggleSelected(w.id) : setManagingWorker(w))}
                   >
                     {selectMode && <span className={`timebook-checkbox${selectedIds.has(w.id) ? " checked" : ""}`} />}
+                    {w.employeeCode && <span className="timebook-employee-code">{w.employeeCode}</span>}
                     {w.name}
                     {w.role && <span className="timebook-role">{w.role}</span>}
                   </td>
@@ -303,7 +353,7 @@ export default function TimeBookPage() {
                     const e = entryMap.get(`${w.id}|${d}`);
                     const letter = e?.code ? ATTENDANCE_LETTER[e.code] : "";
                     return (
-                      <td key={d} className="grazing-table-cell timebook-cell" onClick={() => openCell(w, d)}>
+                      <td key={d} className={`grazing-table-cell timebook-cell${FLAGGED_CODES.has(e?.code ?? "") ? " timebook-flagged" : ""}`} onClick={() => openCell(w, d)}>
                         <span className="timebook-code">{letter}</span>
                         {e?.overtime && <span className="timebook-overtime">{e.overtime}</span>}
                       </td>
@@ -337,12 +387,15 @@ export default function TimeBookPage() {
             <tbody>
               {workers.map((w) => (
                 <tr key={w.id}>
-                  <td className="grazing-table-label timebook-name">{w.name}</td>
+                  <td className="grazing-table-label timebook-name">
+                    {w.employeeCode && <span className="timebook-employee-code">{w.employeeCode}</span>}
+                    {w.name}
+                  </td>
                   {printDays.map((d) => {
                     const e = printEntryMap.get(`${w.id}|${d}`);
                     const letter = e?.code ? ATTENDANCE_LETTER[e.code] : "";
                     return (
-                      <td key={d} className="grazing-table-cell timebook-cell">
+                      <td key={d} className={`grazing-table-cell timebook-cell${FLAGGED_CODES.has(e?.code ?? "") ? " timebook-flagged" : ""}`}>
                         <span className="timebook-code">{letter}</span>
                         {e?.overtime && <span className="timebook-overtime">{e.overtime}</span>}
                       </td>
@@ -352,6 +405,32 @@ export default function TimeBookPage() {
               ))}
             </tbody>
           </table>
+
+          {overtimeSummary && overtimeSummary.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <p className="timebook-title-print" style={{ display: "block", fontSize: 12 }}>
+                Overtime total, {otFrom} to {otTo}
+              </p>
+              <table className="grazing-table timebook-table" style={{ minWidth: 300 }}>
+                <thead>
+                  <tr>
+                    <th className="grazing-table-label">Name</th>
+                    <th>Normal OT</th>
+                    <th>Sun/PH OT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overtimeSummary.map((r) => (
+                    <tr key={r.name}>
+                      <td className="grazing-table-label timebook-name">{r.name}</td>
+                      <td className="grazing-table-cell">{Math.round(r.normal * 100) / 100}</td>
+                      <td className="grazing-table-cell">{Math.round(r.premium * 100) / 100}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -453,6 +532,7 @@ function WorkerManager({
   onLeaveApplied: () => void;
 }) {
   const [name, setName] = useState(worker.name);
+  const [employeeCode, setEmployeeCode] = useState(worker.employeeCode ?? "");
   const [role, setRole] = useState(worker.role ?? "");
   const [notes, setNotes] = useState(worker.notes ?? "");
   const [saving, setSaving] = useState(false);
@@ -490,7 +570,7 @@ function WorkerManager({
     await fetch(`/api/workers/${worker.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), role: role.trim() || null, notes: notes.trim() || null }),
+      body: JSON.stringify({ name: name.trim(), employeeCode: employeeCode.trim() || null, role: role.trim() || null, notes: notes.trim() || null }),
     });
     setSaving(false);
     onChanged();
@@ -519,6 +599,11 @@ function WorkerManager({
         <label className="field">
           <span className="field-label">Name</span>
           <input className="field-input" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+
+        <label className="field">
+          <span className="field-label">Employee code</span>
+          <input className="field-input" value={employeeCode} onChange={(e) => setEmployeeCode(e.target.value)} placeholder="e.g. payroll/clock number" />
         </label>
 
         <label className="field">

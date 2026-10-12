@@ -234,6 +234,7 @@ export type Worker = {
   farmId: string;
   section: "DAIRY" | "STAFF" | "TOGH" | "HAYDEN";
   name: string;
+  employeeCode: string | null;
   role: string | null;
   notes: string | null;
   active: boolean;

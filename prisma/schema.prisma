@@ -407,15 +407,16 @@ enum AttendanceCode {
 }
 
 model Worker {
-  id        String          @id @default(cuid())
-  farmId    String
-  section   TimeBookSection
-  name      String
-  role      String? // what they do
-  notes     String?
-  active    Boolean         @default(true)
-  sortOrder Int             @default(0)
-  createdAt DateTime        @default(now())
+  id           String          @id @default(cuid())
+  farmId       String
+  section      TimeBookSection
+  name         String
+  employeeCode String? // e.g. payroll/clock number — shown small next to the name
+  role         String? // what they do
+  notes        String?
+  active       Boolean         @default(true)
+  sortOrder    Int             @default(0)
+  createdAt    DateTime        @default(now())
 
   farm         Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
   entries      TimeBookEntry[]

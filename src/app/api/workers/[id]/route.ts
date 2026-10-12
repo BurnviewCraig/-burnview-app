@@ -4,12 +4,13 @@ import { prisma } from "@/lib/prisma";
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const data: { name?: string; role?: string | null; notes?: string | null; sortOrder?: number; active?: boolean } = {};
+  const data: { name?: string; employeeCode?: string | null; role?: string | null; notes?: string | null; sortOrder?: number; active?: boolean } = {};
   if ("name" in body) {
     const name = String(body.name).trim();
     if (!name) return NextResponse.json({ error: "Name can't be empty" }, { status: 400 });
     data.name = name;
   }
+  if ("employeeCode" in body) data.employeeCode = body.employeeCode ? String(body.employeeCode).trim() || null : null;
   if ("role" in body) data.role = body.role ? String(body.role).trim() || null : null;
   if ("notes" in body) data.notes = body.notes ? String(body.notes).trim() || null : null;
   if ("sortOrder" in body) data.sortOrder = Number(body.sortOrder);
