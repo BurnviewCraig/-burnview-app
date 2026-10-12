@@ -244,7 +244,7 @@ export type TimeBookEntry = {
   id: string;
   workerId: string;
   date: string;
-  code: "PRESENT" | "SICK" | "LEAVE" | "ABSENT" | "OFF" | "FAMILY_RESPONSIBILITY" | null;
+  code: "PRESENT" | "SICK" | "LEAVE" | "ABSENT" | "OFF" | "FAMILY_RESPONSIBILITY" | "INJURED_ON_DUTY" | null;
   overtime: string | null;
 };
 

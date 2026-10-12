@@ -234,6 +234,7 @@ export const ATTENDANCE_CODES = [
   { id: "ABSENT", letter: "A", label: "Absent" },
   { id: "OFF", letter: "O", label: "Off" },
   { id: "FAMILY_RESPONSIBILITY", letter: "F", label: "Family responsibility" },
+  { id: "INJURED_ON_DUTY", letter: "I", label: "Injured on duty" },
 ] as const;
 
 export const ATTENDANCE_LETTER: Record<string, string> = Object.fromEntries(

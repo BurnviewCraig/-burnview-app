@@ -4,7 +4,10 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export const authOptions: AuthOptions = {
-  session: { strategy: "jwt" },
+  // Signed-in sessions expire after 3 days of inactivity (NextAuth's
+  // default is 30) — farm PCs/phones are often left logged in, so this
+  // caps how long a stolen/left-open session stays valid.
+  session: { strategy: "jwt", maxAge: 3 * 24 * 60 * 60 },
   pages: { signIn: "/login" },
   providers: [
     CredentialsProvider({

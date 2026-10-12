@@ -395,7 +395,7 @@ enum TimeBookSection {
   HAYDEN
 }
 
-// / = present, L = leave, A = absent, O = off, S = sick, F = family responsibility
+// / = present, L = leave, A = absent, O = off, S = sick, F = family responsibility, I = injured on duty
 enum AttendanceCode {
   PRESENT
   LEAVE
@@ -403,6 +403,7 @@ enum AttendanceCode {
   OFF
   SICK
   FAMILY_RESPONSIBILITY
+  INJURED_ON_DUTY
 }
 
 model Worker {

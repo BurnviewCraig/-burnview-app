@@ -131,7 +131,8 @@ function WedgeCharts({
             style={{ width: (width - CHART_Y_AXIS_WIDTH - CHART_RIGHT_MARGIN) / sorted.length }}
             onClick={onBarClick ? () => onBarClick(p) : undefined}
           >
-            {p.code}{p.daysSinceDefoliation != null ? `(${p.daysSinceDefoliation})` : ""}
+            <strong>{p.code}</strong>
+            {p.daysSinceDefoliation != null && <strong style={{ color: "#B5533C" }}>({p.daysSinceDefoliation})</strong>}
           </div>
         ))}
       </div>
