@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { currentUserId } from "@/lib/session";
 import { LAND_PREP_METHODS, CROP_TO_LAND_TYPE } from "@/lib/constants";
+import { recomputeMaizeDerivedFields } from "@/lib/maizeAutoPopulate";
 
 type MixItem = { crop: string; variety: string | null; rate: number; unit: string };
 type ChemItem = { name: string; rate: number; unit: string };
@@ -68,6 +69,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const isTillage = "method" in body && existing.type === "LAND_PREP" && LAND_PREP_METHODS.find((m) => m.name === method)?.tillage === true;
   const majorityLandType = "mix" in body && existing.type === "PLANTING" ? computeMajorityLandType(mix) : null;
+  const effectiveSprayPurpose = "sprayPurpose" in body ? sprayPurpose : existing.sprayPurpose;
+  const isBurndown = existing.type === "SPRAYING" && effectiveSprayPurpose === "Burndown";
 
   const updated = await prisma.$transaction(async (tx) => {
     if (touchesBailingFields && existing.stockEntry) {
@@ -102,8 +105,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (isTillage) {
       await tx.paddock.update({ where: { id: existing.paddockId }, data: { landType: "Unplanted" } });
+    } else if (isBurndown) {
+      await tx.paddock.update({ where: { id: existing.paddockId }, data: { landType: "Burnt off" } });
     } else if (majorityLandType) {
       await tx.paddock.update({ where: { id: existing.paddockId }, data: { landType: majorityLandType } });
+    }
+
+    // Any edit to a spray/fertilizer entry can change which date it
+    // contributes (or whether it still qualifies at all) — recompute from
+    // the current state rather than trying to patch the old value forward.
+    if (existing.type === "SPRAYING" || existing.type === "FERTILIZER") {
+      await recomputeMaizeDerivedFields(tx, existing.paddockId);
     }
 
     return entry;
@@ -129,6 +141,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     }
     // Deleting the FieldActivity cascades to its StockEntry automatically.
     await tx.fieldActivity.delete({ where: { id } });
+
+    // Deleting a mistaken spray/fertilizer entry previously left Maize
+    // History holding whatever date it had set — recompute from what's
+    // actually left now that this one's gone.
+    if (existing.type === "SPRAYING" || existing.type === "FERTILIZER") {
+      await recomputeMaizeDerivedFields(tx, existing.paddockId);
+    }
   });
 
   return NextResponse.json({ ok: true });

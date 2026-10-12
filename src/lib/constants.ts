@@ -87,7 +87,7 @@ export const CROP_TO_LAND_TYPE: Record<string, string> = {
 };
 export const LAND_TYPES = [
   "Rye grass", "Kikuyu", "Maize", "Oats", "Lucerne", "High Velt",
-  "Chicory", "Red clover", "White clover", "Unplanted",
+  "Chicory", "Red clover", "White clover", "Unplanted", "Burnt off",
 ] as const;
 
 // Maize is drilled by seed count, not weight — every other crop here is kg/ha.

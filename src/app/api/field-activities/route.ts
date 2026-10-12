@@ -4,16 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { currentUserId } from "@/lib/session";
 import { LAND_PREP_METHODS, CROP_TO_LAND_TYPE } from "@/lib/constants";
 import { maizeSeasonFor } from "@/lib/maizeSeason";
-
-// Maps the Spraying form's optional purpose chip to the MaizeFieldSeason
-// date field it fills — explicit, rather than guessing from date order, so
-// it's only ever as accurate as what was actually tagged.
-const SPRAY_PURPOSE_FIELD: Record<string, "burndownDate" | "preGerminationSprayDate" | "firstPostSprayDate" | "lastTractorEntryDate"> = {
-  "Burndown": "burndownDate",
-  "Pre-Germination Spray": "preGerminationSprayDate",
-  "1st Post Spray": "firstPostSprayDate",
-  "Last tractor entry spray": "lastTractorEntryDate",
-};
+import { SPRAY_PURPOSE_FIELD, TOP_DRESS_MIN_DAYS_AFTER_PLANTING, BURNDOWN_LOOKBACK_DAYS, recomputeMaizeDerivedFields } from "@/lib/maizeAutoPopulate";
 
 // Keeps each maize field's season record in step with the activities
 // actually logged against it — see the MaizeFieldSeason model comment for
@@ -78,6 +69,23 @@ async function autoPopulateMaizeBatch(
     if (toCreate.length > 0) {
       await tx.maizeFieldSeason.createMany({ data: toCreate.map((paddockId) => ({ farmId, paddockId, season, ...data })) });
     }
+    // A burndown spray logged before this planting had no season to
+    // attach to yet at the time — now that one exists, look back and pick
+    // it up (see recomputeMaizeDerivedFields for why burndown specifically
+    // needs this, unlike the other spray purposes). Only recompute the
+    // (typically zero, rarely more than a couple) paddocks that actually
+    // have one on file — looping this for every paddock in a whole-pivot
+    // planting would reintroduce the per-paddock round-trip cost that used
+    // to blow through Prisma's transaction time limit on a big batch.
+    const burndownLookbackStart = new Date(activityDate.getTime() - BURNDOWN_LOOKBACK_DAYS * 86400000);
+    const paddocksWithPriorBurndown = await tx.fieldActivity.findMany({
+      where: { paddockId: { in: paddockIds }, type: "SPRAYING", sprayPurpose: "Burndown", date: { gte: burndownLookbackStart, lt: activityDate } },
+      select: { paddockId: true },
+      distinct: ["paddockId"],
+    });
+    for (const { paddockId } of paddocksWithPriorBurndown) {
+      await recomputeMaizeDerivedFields(tx, paddockId);
+    }
     return;
   }
 
@@ -101,14 +109,19 @@ async function autoPopulateMaizeBatch(
     return;
   }
 
-  // Fertilizer applied after planting is assumed to be top-dressing — a
-  // basal application at/before planting doesn't count as either date.
-  // Each record's own state decides whether it still needs a first or
-  // second top-dressing date, so the batch splits into two update groups.
+  // Fertilizer applied well after planting is assumed to be top-dressing —
+  // a basal application at/before planting doesn't count as either date,
+  // and neither does one within the first ~week and a half, which is a
+  // starter/correction dose rather than true top-dressing (that happens
+  // weeks later at a specific growth stage — a MAP correction applied 3
+  // days after planting was previously getting recorded as "first top-
+  // dressing", which it wasn't). Each record's own state decides whether
+  // it still needs a first or second top-dressing date, so the batch
+  // splits into two update groups.
   const needsFirst: string[] = [];
   const needsSecond: string[] = [];
   for (const c of currentByPaddock.values()) {
-    if (!c.plantDate || activityDate <= c.plantDate) continue;
+    if (!c.plantDate || activityDate.getTime() - c.plantDate.getTime() < TOP_DRESS_MIN_DAYS_AFTER_PLANTING * 86400000) continue;
     if (!c.firstTopDressingDate) needsFirst.push(c.id);
     else if (!c.secondTopDressingDate && c.firstTopDressingDate && activityDate > c.firstTopDressingDate) needsSecond.push(c.id);
   }
@@ -191,6 +204,10 @@ export async function POST(req: Request) {
   })();
 
   const isTillage = type === "LAND_PREP" && LAND_PREP_METHODS.find((m) => m.name === method)?.tillage === true;
+  // Burndown kills off whatever was growing (Oats, Maize, Rye, …) ahead of
+  // replanting — the field reads as "Burnt off" on the map from that point
+  // until it's actually planted, when majorityCrop above takes over again.
+  const isBurndown = type === "SPRAYING" && sprayPurpose === "Burndown";
 
   // Bailing always logs one paddock at a time from the client (each camp's
   // bale count is its own row), and needs each entry's own id right away to
@@ -262,6 +279,8 @@ export async function POST(req: Request) {
 
     if (isTillage) {
       await tx.paddock.updateMany({ where: { id: { in: paddockIds } }, data: { landType: "Unplanted" } });
+    } else if (isBurndown) {
+      await tx.paddock.updateMany({ where: { id: { in: paddockIds } }, data: { landType: "Burnt off" } });
     } else if (majorityCrop) {
       await tx.paddock.updateMany({ where: { id: { in: paddockIds } }, data: { landType: majorityCrop } });
     }
