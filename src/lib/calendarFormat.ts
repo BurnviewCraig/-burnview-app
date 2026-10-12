@@ -43,8 +43,8 @@ export type RawGrazing = {
   farmName: string;
   date: string;
   count: number | null;
-  dayPaddockCode: string | null;
-  nightPaddockCode: string | null;
+  dayPaddockCodes: string[];
+  nightPaddockCodes: string[];
 };
 
 // One buyer's collection — a farm can have several of these on the same
@@ -206,17 +206,24 @@ export function milkSaleGroupLabel(g: MilkSaleGroup): string {
 }
 
 // "A (510) — R49 Day, Night" when day/night share a camp, or
-// "A (511) — R49 Day, R26 Night" when they don't. Headcount is omitted if
-// none has been logged yet.
+// "A (511) — R49 Day, R26 Night" when they don't. A session split across
+// two camps (sometimes done at Everfair) shows as "R49+R26 Day". Headcount
+// is omitted if none has been logged yet.
+
+function sortedCodeList(codes: string[]): string {
+  return [...codes].sort((a, b) => numPart(a) - numPart(b)).join("+");
+}
 
 export function grazingLabel(g: RawGrazing): string {
   const countPart = g.count != null ? ` (${g.count})` : "";
+  const dayStr = sortedCodeList(g.dayPaddockCodes);
+  const nightStr = sortedCodeList(g.nightPaddockCodes);
   const parts: string[] = [];
-  if (g.dayPaddockCode && g.dayPaddockCode === g.nightPaddockCode) {
-    parts.push(`${g.dayPaddockCode} Day, Night`);
+  if (dayStr && dayStr === nightStr) {
+    parts.push(`${dayStr} Day, Night`);
   } else {
-    if (g.dayPaddockCode) parts.push(`${g.dayPaddockCode} Day`);
-    if (g.nightPaddockCode) parts.push(`${g.nightPaddockCode} Night`);
+    if (dayStr) parts.push(`${dayStr} Day`);
+    if (nightStr) parts.push(`${nightStr} Night`);
   }
   return `${g.groupName}${countPart} — ${parts.join(", ")}`;
 }

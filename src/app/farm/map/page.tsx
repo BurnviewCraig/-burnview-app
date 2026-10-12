@@ -268,13 +268,14 @@ export default function FarmMapPage() {
   // Which group letter(s) to show over each paddock right now. A group can
   // show on two paddocks if its day and night camp differ today — in that
   // case each marker is tagged "Day"/"Night" so two same-letter markers
-  // don't look like an unexplained duplicate.
+  // don't look like an unexplained duplicate. A session can also be split
+  // across two camps (sometimes done at Everfair), so day/night are each a
+  // set of paddock ids rather than a single one.
   const grazingNowByPaddock = useMemo(() => {
-    const byGroup = new Map<string, { name: string; day: string | null; night: string | null }>();
+    const byGroup = new Map<string, { name: string; day: Set<string>; night: Set<string> }>();
     (todayGrazingData?.allocations ?? []).forEach((a) => {
-      const entry = byGroup.get(a.groupId) ?? { name: a.group.name, day: null, night: null };
-      if (a.session === "DAY") entry.day = a.paddockId;
-      else entry.night = a.paddockId;
+      const entry = byGroup.get(a.groupId) ?? { name: a.group.name, day: new Set<string>(), night: new Set<string>() };
+      (a.session === "DAY" ? entry.day : entry.night).add(a.paddockId);
       byGroup.set(a.groupId, entry);
     });
     const map = new Map<string, { label: string; tag: string | null }[]>();
@@ -284,11 +285,10 @@ export default function FarmMapPage() {
       map.set(paddockId, list);
     };
     byGroup.forEach(({ name, day, night }) => {
-      if (day && day === night) add(day, name, null);
-      else {
-        if (day) add(day, name, "Day");
-        if (night) add(night, name, "Night");
-      }
+      const both = [...day].filter((p) => night.has(p));
+      both.forEach((p) => add(p, name, null));
+      [...day].filter((p) => !night.has(p)).forEach((p) => add(p, name, "Day"));
+      [...night].filter((p) => !day.has(p)).forEach((p) => add(p, name, "Night"));
     });
     return map;
   }, [todayGrazingData]);

@@ -11,7 +11,7 @@ import { addDays } from "@/lib/calendarFormat";
 import type { Farm, CattleGroup, GrazingAllocation } from "@/lib/types";
 
 type Session = "DAY" | "NIGHT";
-type CellTarget = { groupId: string; groupName: string; date: string; session: Session; currentPaddockId: string; currentAllocationId: string | null };
+type CellTarget = { groupId: string; groupName: string; date: string; session: Session; currentPaddockIds: string[] };
 
 export default function GrazingAllocationPage() {
   const { data: farmsData, loading } = useApi<{ farms: Farm[] }>("/api/farms");
@@ -39,10 +39,18 @@ export default function GrazingAllocationPage() {
   const allocations = allocData?.allocations ?? [];
 
   const cellMap = useMemo(() => {
-    const map = new Map<string, GrazingAllocation>();
-    allocations.forEach((a) => map.set(`${a.groupId}|${a.date.slice(0, 10)}|${a.session}`, a));
+    const map = new Map<string, GrazingAllocation[]>();
+    allocations.forEach((a) => {
+      const key = `${a.groupId}|${a.date.slice(0, 10)}|${a.session}`;
+      map.set(key, [...(map.get(key) ?? []), a]);
+    });
     return map;
   }, [allocations]);
+
+  const cellLabel = (cell: GrazingAllocation[] | undefined) =>
+    cell && cell.length
+      ? [...cell].map((a) => a.paddock.code).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join("+")
+      : "—";
 
   const [cellTarget, setCellTarget] = useState<CellTarget | null>(null);
 
@@ -52,14 +60,13 @@ export default function GrazingAllocationPage() {
   };
 
   const openCell = (g: CattleGroup, date: string, session: Session) => {
-    const existing = cellMap.get(`${g.id}|${date}|${session}`);
+    const existing = cellMap.get(`${g.id}|${date}|${session}`) ?? [];
     setCellTarget({
       groupId: g.id,
       groupName: g.name,
       date,
       session,
-      currentPaddockId: existing?.paddockId ?? "",
-      currentAllocationId: existing?.id ?? null,
+      currentPaddockIds: existing.map((a) => a.paddockId),
     });
   };
 
@@ -112,7 +119,7 @@ export default function GrazingAllocationPage() {
                       const cell = cellMap.get(`${g.id}|${d}|DAY`);
                       return (
                         <td key={d} className="grazing-table-cell" onClick={() => openCell(g, d, "DAY")}>
-                          {cell?.paddock.code ?? "—"}
+                          {cellLabel(cell)}
                         </td>
                       );
                     })}
@@ -123,7 +130,7 @@ export default function GrazingAllocationPage() {
                       const cell = cellMap.get(`${g.id}|${d}|NIGHT`);
                       return (
                         <td key={d} className="grazing-table-cell" onClick={() => openCell(g, d, "NIGHT")}>
-                          {cell?.paddock.code ?? "—"}
+                          {cellLabel(cell)}
                         </td>
                       );
                     })}
@@ -148,6 +155,9 @@ export default function GrazingAllocationPage() {
   );
 }
 
+type CampRow = { rowId: string; paddockId: string };
+const newCampRow = (paddockId = ""): CampRow => ({ rowId: Math.random().toString(36).slice(2), paddockId });
+
 function CellEditor({
   target,
   farmId,
@@ -161,13 +171,21 @@ function CellEditor({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [paddockId, setPaddockId] = useState(target.currentPaddockId);
+  const [rows, setRows] = useState<CampRow[]>(
+    target.currentPaddockIds.length ? target.currentPaddockIds.map((id) => newCampRow(id)) : [newCampRow()]
+  );
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
 
-  const handleSave = async () => {
-    if (!paddockId) return;
-    setSaving(true);
+  const chosenIds = new Set(rows.map((r) => r.paddockId).filter(Boolean));
+  const validPaddockIds = rows.map((r) => r.paddockId).filter(Boolean);
+
+  const updateRow = (rowId: string, paddockId: string) =>
+    setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, paddockId } : r)));
+  const addRow = () => setRows((prev) => [...prev, newCampRow()]);
+  const removeRow = (rowId: string) => setRows((prev) => prev.filter((r) => r.rowId !== rowId));
+
+  const postSessions = async (paddockIds: string[]) => {
     await fetch("/api/grazing-allocations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -175,17 +193,23 @@ function CellEditor({
         groupId: target.groupId,
         farmId,
         date: target.date,
-        sessions: [{ session: target.session, paddockId }],
+        sessions: [{ session: target.session, paddockIds }],
       }),
     });
+  };
+
+  const handleSave = async () => {
+    if (!validPaddockIds.length) return;
+    setSaving(true);
+    await postSessions(validPaddockIds);
     setSaving(false);
     onSaved();
   };
 
   const handleClear = async () => {
-    if (!target.currentAllocationId) { onClose(); return; }
+    if (!target.currentPaddockIds.length) { onClose(); return; }
     setClearing(true);
-    await fetch(`/api/grazing-allocations/${target.currentAllocationId}`, { method: "DELETE" });
+    await postSessions([]);
     setClearing(false);
     onSaved();
   };
@@ -204,18 +228,42 @@ function CellEditor({
           <X size={18} className="close" onClick={onClose} />
         </div>
         <div className="edit-entry-body">
-          <label className="field">
-            <span className="field-label">Camp</span>
-            <select className="field-input" value={paddockId} onChange={(e) => setPaddockId(e.target.value)}>
-              <option value="">Select…</option>
-              {paddocks.map((p) => <option key={p.id} value={p.id}>{p.code}</option>)}
-            </select>
-          </label>
+          <div className="field">
+            <span className="field-label">Camp(s) — add a second camp if this session is split across two</span>
+            <div className="chem-rows">
+              {rows.map((row) => (
+                <div key={row.rowId} className="chem-row">
+                  <select
+                    className="field-input"
+                    value={row.paddockId}
+                    onChange={(e) => updateRow(row.rowId, e.target.value)}
+                  >
+                    <option value="">Select…</option>
+                    {paddocks
+                      .filter((p) => p.id === row.paddockId || !chosenIds.has(p.id))
+                      .map((p) => <option key={p.id} value={p.id}>{p.code}</option>)}
+                  </select>
+                  <button
+                    type="button"
+                    className="link-btn chem-row-remove"
+                    onClick={() => removeRow(row.rowId)}
+                    disabled={rows.length === 1}
+                    aria-label="Remove camp"
+                  >
+                    <X size={16} strokeWidth={1.75} />
+                  </button>
+                </div>
+              ))}
+              <button type="button" className="link-btn" onClick={addRow} disabled={chosenIds.size >= paddocks.length}>
+                + Add camp
+              </button>
+            </div>
+          </div>
           <div className="edit-entry-actions">
-            <button className="save-btn" onClick={handleSave} disabled={saving || !paddockId}>
+            <button className="save-btn" onClick={handleSave} disabled={saving || !validPaddockIds.length}>
               {saving ? "Saving…" : "Save"}
             </button>
-            {target.currentAllocationId && (
+            {target.currentPaddockIds.length > 0 && (
               <button className="delete-btn" onClick={handleClear} disabled={clearing}>
                 {clearing ? "Clearing…" : "Clear this entry"}
               </button>

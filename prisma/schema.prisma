@@ -106,9 +106,10 @@ enum GrazingSession {
   NIGHT
 }
 
-// One camp a group grazed for one session on one date. A camp with 2+
-// allocations in a day just means 2+ of these rows across different groups
-// or sessions point at the same paddock.
+// One camp a group grazed for one session on one date. A group can have
+// more than one of these for the same date+session — e.g. Everfair
+// sometimes splits a session across two camps — so the "pair" for a
+// session is every row sharing that groupId+date+session, not just one.
 model GrazingAllocation {
   id      String         @id @default(cuid())
   groupId String
@@ -126,7 +127,7 @@ model GrazingAllocation {
   paddock   Paddock     @relation(fields: [paddockId], references: [id], onDelete: Cascade)
   createdBy User?       @relation(fields: [createdById], references: [id])
 
-  @@unique([groupId, date, session])
+  @@unique([groupId, date, session, paddockId])
   @@index([farmId, date])
 }
 

@@ -54,8 +54,11 @@ export async function GET(req: Request) {
 
   const grazingSummary = [...byGroupDate.entries()].map(([key, rows]) => {
     const [groupId, date] = key.split("|");
-    const day = rows.find((r) => r.session === "DAY");
-    const night = rows.find((r) => r.session === "NIGHT");
+    // A session can now hold more than one camp (a group split across two
+    // camps for the same session) — every row sharing that session counts,
+    // not just the first.
+    const dayCodes = rows.filter((r) => r.session === "DAY").map((r) => r.paddock.code);
+    const nightCodes = rows.filter((r) => r.session === "NIGHT").map((r) => r.paddock.code);
     const first = rows[0];
     const counts = countsByGroup.get(groupId) ?? [];
     const asOf = counts.find((c) => c.date.toISOString().slice(0, 10) <= date);
@@ -65,8 +68,8 @@ export async function GET(req: Request) {
       farmName: first.farm.name,
       date,
       count: asOf?.count ?? null,
-      dayPaddockCode: day?.paddock.code ?? null,
-      nightPaddockCode: night?.paddock.code ?? null,
+      dayPaddockCodes: dayCodes,
+      nightPaddockCodes: nightCodes,
     };
   });
 

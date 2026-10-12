@@ -45,10 +45,13 @@ export async function GET(req: Request) {
   return NextResponse.json({ allocations: withCount });
 }
 
-// Upsert one or both sessions (day/night) for a group on a date. Each
-// session is independent — a group can have just a day allocation, just a
-// night one, or both, and re-posting the same group/date/session corrects
-// that entry rather than duplicating it.
+// Replaces the full set of camps for one or both sessions (day/night) for a
+// group on a date. Each session is independent — a group can have just a
+// day allocation, just a night one, or both — and each session can now hold
+// more than one camp (a group can be split across two camps in the same
+// session, which Everfair sometimes does). Re-posting a session's camp list
+// reconciles it: camps no longer in the list are removed, camps already
+// there are left alone (notes refreshed), and new ones are added.
 export async function POST(req: Request) {
   const body = await req.json();
   const {
@@ -62,7 +65,7 @@ export async function POST(req: Request) {
     farmId: string;
     date: string;
     notes?: string;
-    sessions: { session: "DAY" | "NIGHT"; paddockId: string }[];
+    sessions: { session: "DAY" | "NIGHT"; paddockIds: string[] }[];
   } = body;
 
   if (!groupId || !farmId || !date || !sessions?.length) {
@@ -70,16 +73,28 @@ export async function POST(req: Request) {
   }
 
   const userId = await currentUserId();
+  const dateObj = new Date(date);
 
-  const saved = await prisma.$transaction(
-    sessions.map((s) =>
-      prisma.grazingAllocation.upsert({
-        where: { groupId_date_session: { groupId, date: new Date(date), session: s.session } },
-        update: { paddockId: s.paddockId, notes: notes || null, createdById: userId },
-        create: { groupId, farmId, paddockId: s.paddockId, date: new Date(date), session: s.session, notes: notes || null, createdById: userId },
-      })
-    )
-  );
+  const existing = await prisma.grazingAllocation.findMany({
+    where: { groupId, date: dateObj, session: { in: sessions.map((s) => s.session) } },
+  });
+
+  const ops = sessions.flatMap((s) => {
+    const keepIds = new Set(s.paddockIds);
+    const toDelete = existing.filter((e) => e.session === s.session && !keepIds.has(e.paddockId));
+    return [
+      ...toDelete.map((row) => prisma.grazingAllocation.delete({ where: { id: row.id } })),
+      ...s.paddockIds.map((paddockId) =>
+        prisma.grazingAllocation.upsert({
+          where: { groupId_date_session_paddockId: { groupId, date: dateObj, session: s.session, paddockId } },
+          update: { notes: notes || null, createdById: userId },
+          create: { groupId, farmId, paddockId, date: dateObj, session: s.session, notes: notes || null, createdById: userId },
+        })
+      ),
+    ];
+  });
+
+  const saved = await prisma.$transaction(ops);
 
   return NextResponse.json({ allocations: saved });
 }

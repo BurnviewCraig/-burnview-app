@@ -114,12 +114,20 @@ function GroupPageContent() {
   const grazingLabel = (d: string) => {
     const rows = allocByDate.get(d);
     if (!rows || !rows.length) return "—";
-    const day = rows.find((r) => r.session === "DAY");
-    const night = rows.find((r) => r.session === "NIGHT");
-    if (day && night && day.paddock.code === night.paddock.code) return `${day.paddock.code} Day, Night`;
+    // A session can hold more than one camp (a group split across two
+    // camps for the same session) — join every camp in that session.
+    const codeList = (session: "DAY" | "NIGHT") =>
+      rows
+        .filter((r) => r.session === session)
+        .map((r) => r.paddock.code)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        .join("+");
+    const day = codeList("DAY");
+    const night = codeList("NIGHT");
+    if (day && day === night) return `${day} Day, Night`;
     const parts: string[] = [];
-    if (day) parts.push(`${day.paddock.code} Day`);
-    if (night) parts.push(`${night.paddock.code} Night`);
+    if (day) parts.push(`${day} Day`);
+    if (night) parts.push(`${night} Night`);
     return parts.join(", ") || "—";
   };
 
