@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Plus, Trash2, ChevronDown } from "lucide-react";
+import { X, Plus, Trash2 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
@@ -10,20 +10,27 @@ import type { Farm, OrderNumber } from "@/lib/types";
 
 export default function OrderNumbersPage() {
   const { data, loading, error, refetch } = useApi<{ orderNumbers: OrderNumber[] }>("/api/order-numbers");
-  const orderNumbers = data?.orderNumbers ?? [];
+  const allOrderNumbers = data?.orderNumbers ?? [];
   const { data: farmsData } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
+
+  const [issuer, setIssuer] = useState<string>(ORDER_NUMBER_ISSUERS[0].prefix);
+  const orderNumbers = allOrderNumbers.filter((o) => o.prefix === issuer);
 
   const [active, setActive] = useState<OrderNumber | null>(null);
   const [company, setCompany] = useState("");
   const [farmId, setFarmId] = useState("");
   const [item, setItem] = useState("");
   const [comment, setComment] = useState("");
-  const [pickingIssuer, setPickingIssuer] = useState(false);
-  const [creatingPrefix, setCreatingPrefix] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const switchIssuer = (prefix: string) => {
+    setIssuer(prefix);
+    setActive(null);
+  };
 
   const openEntry = (o: OrderNumber) => {
     setActive(o);
@@ -32,18 +39,16 @@ export default function OrderNumbersPage() {
     setItem(o.item ?? "");
     setComment(o.comment ?? "");
     setConfirmingDelete(false);
-    setPickingIssuer(false);
   };
 
-  const handlePickIssuer = async (prefix: string) => {
-    setCreatingPrefix(prefix);
+  const handleCreate = async () => {
+    setCreating(true);
     const res = await fetch("/api/order-numbers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prefix }),
+      body: JSON.stringify({ prefix: issuer }),
     });
-    setCreatingPrefix(null);
-    setPickingIssuer(false);
+    setCreating(false);
     if (!res.ok) return;
     const json = await res.json();
     refetch();
@@ -90,28 +95,18 @@ export default function OrderNumbersPage() {
     <div className="screen">
       <Header title="Order numbers" backHref="/" />
 
-      <div style={{ padding: "10px 18px 0" }}>
-        <button className="link-btn" onClick={() => setPickingIssuer((v) => !v)}>
-          <Plus size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-          New order number
-          <ChevronDown size={14} style={{ verticalAlign: "-2px", marginLeft: 2 }} />
-        </button>
+      <div className="tabs">
+        {ORDER_NUMBER_ISSUERS.map((iss) => (
+          <button key={iss.prefix} className={`tab${issuer === iss.prefix ? " active" : ""}`} onClick={() => switchIssuer(iss.prefix)}>{iss.name}</button>
+        ))}
       </div>
 
-      {pickingIssuer && (
-        <div className="chip-wrap" style={{ padding: "8px 18px" }}>
-          {ORDER_NUMBER_ISSUERS.map((issuer) => (
-            <button
-              key={issuer.prefix}
-              className="range-chip"
-              onClick={() => handlePickIssuer(issuer.prefix)}
-              disabled={creatingPrefix != null}
-            >
-              {creatingPrefix === issuer.prefix ? "Creating…" : issuer.name}
-            </button>
-          ))}
-        </div>
-      )}
+      <div style={{ padding: "10px 18px 0" }}>
+        <button className="link-btn" onClick={handleCreate} disabled={creating}>
+          <Plus size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+          {creating ? "Creating…" : `New ${issuer} number`}
+        </button>
+      </div>
 
       {orderNumbers.length === 0 ? (
         <p className="ds-note" style={{ padding: "12px 18px" }}>No order numbers yet — create one above.</p>

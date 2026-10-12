@@ -55,41 +55,67 @@ function MilkSoldForm() {
   // LAST month's full total — early in a month that's a handful of days
   // against a complete 30, so it always read as a huge, meaningless drop
   // (e.g. -97% a few days into a new month) rather than any real trend.
-  // Replaced with two fair, equal-length comparisons instead: a daily
-  // average (this month's total spread over every day elapsed so far,
-  // including days with nothing logged yet — not just days with an
-  // entry, so it doesn't inflate early in the month) and a rolling 7-day
-  // average, colour-coded against the 7 days before that.
+  //
+  // Averages below are now also gated on a day being "complete" — on the
+  // All Farms view that means every farm has at least one collection
+  // logged for that date, not just some of them. One farm's entry landing
+  // late (or the AFI import missing a night) used to show as a low day
+  // and drag the whole average down; a day nothing's been logged for yet
+  // (including today, most of the time) is skipped rather than counted as
+  // zero, so dailyAvg stays correct no matter how far into the month it
+  // is, and the 7-day average is genuinely 7 complete days — not whichever
+  // 7 calendar days happen to be most recent, gaps and all.
   const stats = useMemo(() => {
-    const byDate = new Map(dailyTotals.map((p) => [p.date, p.value]));
+    const totalByDate = new Map<string, number>();
+    const farmsByDate = new Map<string, Set<string>>();
+    entries.forEach((e) => {
+      const d = e.date.slice(0, 10);
+      totalByDate.set(d, (totalByDate.get(d) ?? 0) + e.litres);
+      if (!farmsByDate.has(d)) farmsByDate.set(d, new Set());
+      farmsByDate.get(d)!.add(e.farmId);
+    });
+    const farmsNeeded = showingAll ? Math.max(farms.length, 1) : 1;
+    const isComplete = (d: string) => (farmsByDate.get(d)?.size ?? 0) >= farmsNeeded;
+
     const today = todayStr();
     const now = new Date();
     const thisMonth = monthKey(now);
     const lastMonth = monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+
     let thisTotal = 0;
     let lastTotal = 0;
-    dailyTotals.forEach((p) => {
-      const m = p.date.slice(0, 7);
-      if (m === thisMonth) thisTotal += p.value;
-      else if (m === lastMonth) lastTotal += p.value;
+    let thisCompleteSum = 0;
+    let thisCompleteDays = 0;
+    totalByDate.forEach((value, d) => {
+      const m = d.slice(0, 7);
+      if (m === thisMonth) {
+        thisTotal += value;
+        if (isComplete(d)) { thisCompleteSum += value; thisCompleteDays++; }
+      } else if (m === lastMonth) {
+        lastTotal += value;
+      }
     });
     thisTotal = round1(thisTotal);
     lastTotal = round1(lastTotal);
+    const dailyAvg = thisCompleteDays > 0 ? round1(thisCompleteSum / thisCompleteDays) : null;
 
-    const elapsedDaysThisMonth = now.getDate();
-    const dailyAvg = elapsedDaysThisMonth > 0 ? round1(thisTotal / elapsedDaysThisMonth) : null;
-
-    const sumDaysBack = (startOffset: number, endOffset: number) => {
-      let sum = 0;
-      for (let i = startOffset; i <= endOffset; i++) sum += byDate.get(addDays(today, -i)) ?? 0;
-      return sum;
-    };
-    const last7Avg = round1(sumDaysBack(0, 6) / 7);
-    const prev7Avg = round1(sumDaysBack(7, 13) / 7);
-    const trend: "up" | "down" | null = prev7Avg === 0 ? null : last7Avg > prev7Avg ? "up" : last7Avg < prev7Avg ? "down" : null;
+    // Scan backward from today for the most recent complete days — up to
+    // ~4 months back, far more than ever needed, just as a sane bound.
+    const completeDaysDesc: number[] = [];
+    for (let i = 0; i < 120 && completeDaysDesc.length < 14; i++) {
+      const d = addDays(today, -i);
+      if (isComplete(d)) completeDaysDesc.push(totalByDate.get(d) ?? 0);
+    }
+    const last7 = completeDaysDesc.slice(0, 7);
+    const prev7 = completeDaysDesc.slice(7, 14);
+    const avgOf = (vals: number[]) => (vals.length ? round1(vals.reduce((s, v) => s + v, 0) / vals.length) : null);
+    const last7Avg = avgOf(last7);
+    const prev7Avg = avgOf(prev7);
+    const trend: "up" | "down" | null =
+      last7Avg != null && prev7Avg != null ? (last7Avg > prev7Avg ? "up" : last7Avg < prev7Avg ? "down" : null) : null;
 
     return { thisTotal, lastTotal, dailyAvg, last7Avg, trend };
-  }, [dailyTotals]);
+  }, [entries, farms.length, showingAll]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -161,7 +187,7 @@ function MilkSoldForm() {
           <div>
             <span className="wib-k">Avg last 7 days</span>
             <span className={`wib-v cgb-variation${stats.trend ? ` ${stats.trend}` : ""}`}>
-              {stats.trend === "up" ? "▲ " : stats.trend === "down" ? "▼ " : ""}{stats.last7Avg}L
+              {stats.trend === "up" ? "▲ " : stats.trend === "down" ? "▼ " : ""}{stats.last7Avg ?? "—"}L
             </span>
           </div>
         </div>
