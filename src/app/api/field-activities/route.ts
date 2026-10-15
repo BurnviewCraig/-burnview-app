@@ -44,6 +44,9 @@ async function autoPopulateMaizeBatch(
       : undefined;
     const seedCostPerHa =
       variety?.costPerBag && variety.seedsPerBag ? (population / variety.seedsPerBag) * variety.costPerBag : undefined;
+    // "Variety length" is just the variety's days-to-maturity, shown as
+    // free text (e.g. "130 days") — same source as estMaturityDate above.
+    const varietyLength = variety?.daysToMaturity ? `${variety.daysToMaturity} days` : undefined;
 
     // Same mix, same date for every paddock in the batch, so the data to
     // write is identical for all of them — only which ones already have a
@@ -54,6 +57,7 @@ async function autoPopulateMaizeBatch(
       population,
       ...(estMaturityDate ? { estMaturityDate } : {}),
       ...(seedCostPerHa != null ? { seedCostPerHa: Math.round(seedCostPerHa * 100) / 100 } : {}),
+      ...(varietyLength ? { varietyLength } : {}),
     };
 
     const existing = await tx.maizeFieldSeason.findMany({

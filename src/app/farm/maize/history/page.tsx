@@ -192,7 +192,7 @@ function FieldDetailSheet({
         </div>
 
         <p className="field-hint" style={{ marginBottom: 10 }}>
-          Planting, spraying and top-dressing fill most of this in automatically as they&apos;re logged in Field activities — maturity, cut date, silage pit, seed cost and yield still need entering by hand.
+          Planting, spraying and top-dressing fill most of this in automatically as they&apos;re logged in Field activities (variety length comes from the variety&apos;s days-to-maturity in Settings) — cut date, silage pit, seed cost and yield still need entering by hand.
         </p>
         <div className="form" style={{ gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
