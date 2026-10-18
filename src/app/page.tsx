@@ -5,8 +5,9 @@ import { useSession, signOut } from "next-auth/react";
 import { Milk, Settings, LogOut, ClipboardList, Hash, BellRing } from "lucide-react";
 import { useMemo } from "react";
 import { useApi } from "@/lib/useApi";
-import { todayStr, daysBetween } from "@/lib/utils";
+import { todayStr } from "@/lib/utils";
 import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale } from "@/lib/calendarFormat";
+import { dueLabel } from "@/lib/diaryFormat";
 import { CalendarColorIcon, FarmColorIcon, CattleColorIcon, GrassColorIcon, StocksColorIcon, DieselColorIcon } from "@/components/HomeIcons";
 import type { DiaryEntry } from "@/lib/types";
 
@@ -17,7 +18,9 @@ export default function HomePage() {
   const today = todayStr();
   const start = addDays(today, -(WIDGET_DAYS - 1));
   const { data: diaryData } = useApi<{ diaryEntries: DiaryEntry[] }>("/api/diary-entries");
-  const dueOrOverdueCount = (diaryData?.diaryEntries ?? []).filter((e) => daysBetween(today, e.dueDate) <= 0).length;
+  // Already sorted by dueDate asc from the API — the first (undone) entry is
+  // simply whatever's next, overdue or not.
+  const nextEntry = (diaryData?.diaryEntries ?? [])[0] ?? null;
   const { data: calendarData } = useApi<{ activities: RawActivity[]; walks: RawWalk[]; grazing: RawGrazing[]; milkSales: RawMilkSale[] }>(
     `/api/calendar?start=${start}&end=${today}`
   );
@@ -59,7 +62,16 @@ export default function HomePage() {
         <Link className="home-card" href="/diary">
           <BellRing size={30} strokeWidth={1.5} />
           <span className="hc-title">Diary</span>
-          <span className="hc-sub">{dueOrOverdueCount > 0 ? `${dueOrOverdueCount} due or overdue` : "Reminders & recurring tasks"}</span>
+          {nextEntry ? (
+            <span className="hc-sub">
+              {nextEntry.title}
+              <span className={`diary-due diary-due-${dueLabel(nextEntry.dueDate, today).tone}`} style={{ display: "block" }}>
+                {dueLabel(nextEntry.dueDate, today).text}
+              </span>
+            </span>
+          ) : (
+            <span className="hc-sub">Nothing due — add a reminder</span>
+          )}
         </Link>
 
         <Link className="home-card calendar-widget" href="/calendar">

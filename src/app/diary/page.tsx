@@ -2,30 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, X, Trash2, Check, Repeat } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Check, Repeat } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { AccessGate } from "@/components/AccessGate";
 import { useApi } from "@/lib/useApi";
 import { todayStr, daysBetween } from "@/lib/utils";
+import { addDays } from "@/lib/calendarFormat";
+import { REPEAT_PRESETS, dueLabel } from "@/lib/diaryFormat";
 import type { Farm, DiaryEntry } from "@/lib/types";
 
-const REPEAT_PRESETS = [
-  { label: "Weekly", days: 7 },
-  { label: "Monthly", days: 30 },
-  { label: "3-monthly", days: 90 },
-  { label: "6-monthly", days: 180 },
-  { label: "Yearly", days: 365 },
-];
-
-function dueLabel(dueDate: string, today: string) {
-  const diff = daysBetween(today, dueDate);
-  if (diff === 0) return { text: "Due today", tone: "today" as const };
-  if (diff < 0) return { text: `${Math.abs(diff)} day${Math.abs(diff) === 1 ? "" : "s"} overdue`, tone: "overdue" as const };
-  if (diff <= 7) return { text: `In ${diff} day${diff === 1 ? "" : "s"}`, tone: "soon" as const };
-  const dt = new Date(dueDate.slice(0, 10) + "T00:00:00");
-  return { text: dt.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }), tone: "later" as const };
-}
+const WEEK_LENGTH = 7;
 
 export default function DiaryPage() {
   return (
@@ -48,36 +35,34 @@ function DiaryPageInner() {
     [entries, farmFilter]
   );
 
-  const overdue = filtered.filter((e) => daysBetween(today, e.dueDate) < 0);
-  const dueToday = filtered.filter((e) => daysBetween(today, e.dueDate) === 0);
-  const upcoming = filtered.filter((e) => daysBetween(today, e.dueDate) > 0);
+  // Overdue stays pinned above the week grid regardless of which week is
+  // being browsed — a reminder that fell behind must never scroll out of
+  // sight just because the viewed week moved on.
+  const overdue = useMemo(
+    () => filtered.filter((e) => daysBetween(today, e.dueDate) < 0).sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+    [filtered, today]
+  );
+
+  const [anchor, setAnchor] = useState(today);
+  const days = useMemo(() => {
+    const list: string[] = [];
+    for (let i = 0; i < WEEK_LENGTH; i++) list.push(addDays(anchor, i));
+    return list;
+  }, [anchor]);
+
+  const byDate = useMemo(() => {
+    const map = new Map<string, DiaryEntry[]>();
+    filtered.forEach((e) => {
+      const d = e.dueDate.slice(0, 10);
+      map.set(d, [...(map.get(d) ?? []), e]);
+    });
+    return map;
+  }, [filtered]);
 
   const [active, setActive] = useState<DiaryEntry | "new" | null>(null);
 
   if (loading) return <div className="screen"><Header title="Diary" backHref="/" /><Spinner /></div>;
   if (error) return <div className="screen"><Header title="Diary" backHref="/" /><div className="empty">{error}</div></div>;
-
-  const Section = ({ title, list }: { title: string; list: DiaryEntry[] }) =>
-    list.length === 0 ? null : (
-      <div style={{ padding: "4px 18px" }}>
-        <div className="field-hint" style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", margin: "10px 0 4px" }}>{title}</div>
-        <div className="walk-list">
-          {list.map((e) => {
-            const due = dueLabel(e.dueDate, today);
-            return (
-              <button key={e.id} className="walk-row" onClick={() => setActive(e)}>
-                <span className="wr-code">{e.title}</span>
-                <span className="field-editor-sub">
-                  <span className={`diary-due diary-due-${due.tone}`}>{due.text}</span>
-                  {e.farm ? ` · ${e.farm.name}` : " · All farms"}
-                  {e.repeatDays ? ` · repeats every ${e.repeatDays}d` : ""}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
 
   return (
     <div className="screen">
@@ -97,15 +82,62 @@ function DiaryPageInner() {
         </button>
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="ds-note" style={{ padding: "12px 18px" }}>Nothing in the diary yet — add a reminder above.</p>
-      ) : (
-        <>
-          <Section title="Overdue" list={overdue} />
-          <Section title="Due today" list={dueToday} />
-          <Section title="Upcoming" list={upcoming} />
-        </>
+      {overdue.length > 0 && (
+        <div style={{ padding: "10px 18px 0" }}>
+          <div className="field-hint" style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 4px" }}>Overdue</div>
+          <div className="walk-list">
+            {overdue.map((e) => {
+              const due = dueLabel(e.dueDate, today);
+              return (
+                <button key={e.id} className="walk-row" onClick={() => setActive(e)}>
+                  <span className="wr-code">{e.title}</span>
+                  <span className="field-editor-sub">
+                    <span className={`diary-due diary-due-${due.tone}`}>{due.text}</span>
+                    {e.farm ? ` · ${e.farm.name}` : " · All farms"}
+                    {e.repeatDays ? ` · repeats every ${e.repeatDays}d` : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
+
+      <div className="grazing-week-nav">
+        <button className="map-zoom-btn" onClick={() => setAnchor(addDays(anchor, -WEEK_LENGTH))} aria-label="Previous week"><ChevronLeft size={16} /></button>
+        <button className="link-btn" onClick={() => setAnchor(today)}>This week</button>
+        <button className="map-zoom-btn" onClick={() => setAnchor(addDays(anchor, WEEK_LENGTH))} aria-label="Next week"><ChevronRight size={16} /></button>
+      </div>
+
+      <div className="calendar-scroll">
+        <div className="calendar-columns">
+          {days.map((day) => {
+            const dayEntries = byDate.get(day) ?? [];
+            const dt = new Date(day + "T00:00:00");
+            const dayName = dt.toLocaleDateString(undefined, { weekday: "short" });
+            const dayNum = dt.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+            const isToday = day === today;
+            return (
+              <div key={day} className={`calendar-day${isToday ? " today" : ""}`}>
+                <div className="calendar-day-head">
+                  <span className="calendar-day-name">{dayName}</span>
+                  <span className="calendar-day-num">{dayNum}</span>
+                </div>
+                <div className="calendar-day-events">
+                  {dayEntries.length === 0 && <span className="calendar-empty">Nothing due</span>}
+                  {dayEntries.map((e) => (
+                    <div key={e.id} className="calendar-event clickable" onClick={() => setActive(e)}>
+                      {farmFilter === "all" && <span className="calendar-event-farm">{e.farm ? e.farm.name : "All farms"}</span>}
+                      {e.title}
+                      {e.repeatDays ? <Repeat size={11} strokeWidth={2} style={{ verticalAlign: "-1px", marginLeft: 4, opacity: 0.6 }} /> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {active && (
         <DiaryEditor
