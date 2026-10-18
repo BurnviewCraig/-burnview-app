@@ -85,6 +85,19 @@ export type OrderNumber = {
   createdAt: string;
 };
 
+export type DiaryEntry = {
+  id: string;
+  title: string;
+  notes: string | null;
+  dueDate: string;
+  repeatDays: number | null;
+  done: boolean;
+  lastDoneAt: string | null;
+  farmId: string | null;
+  farm: { id: string; name: string } | null;
+  createdAt: string;
+};
+
 export type StockItem = {
   id: string;
   kind: "FEED" | "LAND_INPUT" | "DAIRY";

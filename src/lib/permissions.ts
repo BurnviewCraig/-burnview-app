@@ -19,6 +19,7 @@ export const SECTION_DEFS = [
   { key: "timebook", label: "Time book", sub: "Weekly attendance per farm" },
   { key: "orderNumbers", label: "Order numbers", sub: "CS numbers for purchases" },
   { key: "diesel", label: "Diesel", sub: "Logbook for SARS rebates" },
+  { key: "diary", label: "Diary", sub: "Reminders & recurring tasks" },
 ] as const;
 
 export type SectionKey = (typeof SECTION_DEFS)[number]["key"];

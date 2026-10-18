@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Milk, Settings, LogOut, ClipboardList, Hash } from "lucide-react";
+import { Milk, Settings, LogOut, ClipboardList, Hash, BellRing } from "lucide-react";
 import { useMemo } from "react";
 import { useApi } from "@/lib/useApi";
-import { todayStr } from "@/lib/utils";
+import { todayStr, daysBetween } from "@/lib/utils";
 import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale } from "@/lib/calendarFormat";
 import { CalendarColorIcon, FarmColorIcon, CattleColorIcon, GrassColorIcon, StocksColorIcon, DieselColorIcon } from "@/components/HomeIcons";
+import type { DiaryEntry } from "@/lib/types";
 
 const WIDGET_DAYS = 4; // today + previous 3 — fits comfortably in the card's width
 
@@ -15,6 +16,8 @@ export default function HomePage() {
   const { data: session } = useSession();
   const today = todayStr();
   const start = addDays(today, -(WIDGET_DAYS - 1));
+  const { data: diaryData } = useApi<{ diaryEntries: DiaryEntry[] }>("/api/diary-entries");
+  const dueOrOverdueCount = (diaryData?.diaryEntries ?? []).filter((e) => daysBetween(today, e.dueDate) <= 0).length;
   const { data: calendarData } = useApi<{ activities: RawActivity[]; walks: RawWalk[]; grazing: RawGrazing[]; milkSales: RawMilkSale[] }>(
     `/api/calendar?start=${start}&end=${today}`
   );
@@ -53,6 +56,12 @@ export default function HomePage() {
         </div>
       </div>
       <div className="home-cards">
+        <Link className="home-card" href="/diary">
+          <BellRing size={30} strokeWidth={1.5} />
+          <span className="hc-title">Diary</span>
+          <span className="hc-sub">{dueOrOverdueCount > 0 ? `${dueOrOverdueCount} due or overdue` : "Reminders & recurring tasks"}</span>
+        </Link>
+
         <Link className="home-card calendar-widget" href="/calendar">
           <div className="calendar-widget-head">
             <CalendarColorIcon size={20} />

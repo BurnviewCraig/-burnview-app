@@ -289,6 +289,11 @@ a:visited { color: var(--ink); }
 .delete-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; border-radius: 8px; border: 1px solid #B5533C; background: none; color: #B5533C; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .delete-btn.confirm { background: #B5533C; color: white; }
 .delete-btn:disabled { opacity: 0.5; cursor: default; }
+.diary-due { font-weight: 700; }
+.diary-due-overdue { color: #B5533C; }
+.diary-due-today { color: var(--normal); }
+.diary-due-soon { color: var(--flagged); }
+.diary-due-later { color: var(--ink-soft); font-weight: 400; }
 .history-row.clickable { cursor: pointer; position: relative; }
 .history-row.clickable:hover { background: var(--paper-deep); }
 .hr-edit-icon { color: var(--ink-soft); flex-shrink: 0; margin-left: auto; opacity: 0.6; }

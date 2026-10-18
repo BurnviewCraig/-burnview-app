@@ -24,6 +24,7 @@ function expand(access: SectionAccess | null, farms: Farm[]): Required<Omit<Sect
     stocks: full ? true : !!access?.stocks,
     orderNumbers: full ? true : !!access?.orderNumbers,
     diesel: full ? true : !!access?.diesel,
+    diary: full ? true : !!access?.diary,
     timebook: full
       ? farms.map((f) => f.slug)
       : access?.timebook === true

@@ -35,6 +35,7 @@ model User {
   additionalConcentrates AdditionalConcentrate[]
   maizeFieldSeasons MaizeFieldSeason[]
   maizePlantingPlans MaizePlantingPlan[]
+  diaryEntries    DiaryEntry[]
 }
 
 model Farm {
@@ -57,6 +58,7 @@ model Farm {
   dieselAssets    DieselAsset[]
   maizeFieldSeasons MaizeFieldSeason[]
   maizePlantingPlans MaizePlantingPlan[]
+  diaryEntries    DiaryEntry[]
 }
 
 model Paddock {
@@ -484,6 +486,37 @@ model RainfallEntry {
   createdBy User? @relation(fields: [createdById], references: [id])
 
   @@unique([farmId, date])
+}
+
+// A manager-facing to-do/reminder, deliberately separate from the Calendar
+// (which only ever shows what has already happened on the farm — see
+// calendar/page.tsx). farmId null means it applies to the whole business
+// rather than one farm.
+//
+// repeatDays turns a one-off reminder into a recurring one (e.g. a 6-monthly
+// vaccination = 180). Marking a recurring entry done rolls dueDate forward
+// by repeatDays from its OLD due date (not from today) and leaves done
+// false, so the schedule stays on a fixed cadence instead of drifting later
+// every time it's ticked off a few days late — the entry never actually
+// "completes", it just comes back around. A one-off (repeatDays null) is
+// marked done=true instead and drops out of the active list for good.
+model DiaryEntry {
+  id         String    @id @default(cuid())
+  title      String
+  notes      String?
+  dueDate    DateTime  @db.Date
+  repeatDays Int?
+  done       Boolean   @default(false)
+  lastDoneAt DateTime?
+
+  farmId String?
+  farm   Farm?   @relation(fields: [farmId], references: [id])
+
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([dueDate])
 }
 
 enum DieselUnit {
