@@ -194,6 +194,23 @@ export type AdditionalConcentrate = {
   updatedAt: string;
 };
 
+export type FeedingTotals = {
+  farms: {
+    farmId: string;
+    farmName: string;
+    totalKgPerDay: number;
+    groups: {
+      groupId: string;
+      groupName: string;
+      currentCount: number | null;
+      dairyMealKg: number | null;
+      concentratesKg: number | null;
+      kgPerCow: number | null;
+      kgPerDay: number | null;
+    }[];
+  }[];
+};
+
 export type CattleSummary = {
   current: {
     count: number | null;
