@@ -36,6 +36,7 @@ model User {
   maizeFieldSeasons MaizeFieldSeason[]
   maizePlantingPlans MaizePlantingPlan[]
   diaryEntries    DiaryEntry[]
+  irrigationRuns  IrrigationRun[]
 }
 
 model Farm {
@@ -59,6 +60,7 @@ model Farm {
   maizeFieldSeasons MaizeFieldSeason[]
   maizePlantingPlans MaizePlantingPlan[]
   diaryEntries    DiaryEntry[]
+  pivots          Pivot[]
 }
 
 model Paddock {
@@ -77,8 +79,50 @@ model Paddock {
   grazingAllocations GrazingAllocation[]
   maizeFieldSeasons MaizeFieldSeason[]
   maizePlantingPlans MaizePlantingPlan[]
+  irrigationRuns  IrrigationRun[]
 
   @@unique([farmId, code])
+}
+
+// A physical center pivot, covering a fixed set of camps (see FARM_SECTIONS
+// in src/lib/constants.ts, which this is seeded from — drag-line sections
+// aren't included here since they're moved by hand, not scheduled by %
+// speed). mmAt100Pct is the known depth the pivot lays down per full
+// revolution at its fastest (100%) speed setting — set once per pivot and
+// basically never changes — and is null until someone fills it in, same as
+// any other not-yet-configured field elsewhere in the app.
+model Pivot {
+  id           String   @id @default(cuid())
+  farmId       String
+  name         String
+  paddockCodes String[]
+  mmAt100Pct   Float?
+  sortOrder    Int      @default(0)
+
+  farm Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  runs IrrigationRun[]
+}
+
+// One scheduled start of a pivot — a pivot due to run twice in a week just
+// gets two of these. mm for the run is derived from Pivot.mmAt100Pct and
+// percentage (speed), not stored, so changing the pivot's rating later
+// doesn't leave old runs with a stale figure.
+model IrrigationRun {
+  id             String   @id @default(cuid())
+  pivotId        String
+  date           DateTime @db.Date
+  percentage     Int
+  startPaddockId String?
+  notes          String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  pivot        Pivot    @relation(fields: [pivotId], references: [id], onDelete: Cascade)
+  startPaddock Paddock? @relation(fields: [startPaddockId], references: [id])
+  createdBy    User?    @relation(fields: [createdById], references: [id])
+
+  @@index([date])
 }
 
 // A milking herd/mob — "A", "B", "C" on Burnview, "EA" on Everfair, "SA"/"SB"

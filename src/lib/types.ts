@@ -98,6 +98,29 @@ export type DiaryEntry = {
   createdAt: string;
 };
 
+export type Pivot = {
+  id: string;
+  farmId: string;
+  farm: { id: string; name: string };
+  name: string;
+  paddockCodes: string[];
+  mmAt100Pct: number | null;
+  sortOrder: number;
+};
+
+export type IrrigationRun = {
+  id: string;
+  pivotId: string;
+  date: string;
+  percentage: number;
+  startPaddockId: string | null;
+  startPaddock: { id: string; code: string } | null;
+  notes: string | null;
+  createdAt: string;
+};
+
+export type IrrigationConflict = { paddockCode: string; groupName: string; date: string };
+
 export type StockItem = {
   id: string;
   kind: "FEED" | "LAND_INPUT" | "DAIRY";
