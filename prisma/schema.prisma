@@ -37,6 +37,7 @@ model User {
   maizePlantingPlans MaizePlantingPlan[]
   diaryEntries    DiaryEntry[]
   irrigationRuns  IrrigationRun[]
+  waterMeterReadings WaterMeterReading[]
 }
 
 model Farm {
@@ -61,6 +62,7 @@ model Farm {
   maizePlantingPlans MaizePlantingPlan[]
   diaryEntries    DiaryEntry[]
   pivots          Pivot[]
+  waterMeters     WaterMeter[]
 }
 
 model Paddock {
@@ -127,6 +129,45 @@ model IrrigationRun {
   createdBy    User?    @relation(fields: [createdById], references: [id])
 
   @@index([date])
+}
+
+// A physical water meter whose dial is read periodically. groupName is how
+// the supplying authority bills it — e.g. Burnview's Glenroy Drag lines /
+// Glenroy Picnic spot / Burnside dam meters are all billed together as one
+// "Nkonza Water Board" account, while its Umzinkulu River meter is a
+// separate, unrelated supply with its own tally. Stockton's two meters are
+// both billed by its own water board. Grouping (not just farm) is what the
+// year-to-date tally is summed over — see WaterMeterReading.
+model WaterMeter {
+  id        String @id @default(cuid())
+  farmId    String
+  name      String
+  groupName String
+  sortOrder Int    @default(0)
+
+  farm     Farm                @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  readings WaterMeterReading[]
+}
+
+// One dial reading on one date — the meter's cumulative total, not a
+// per-period amount. The usage for a reading ("that month's cubes") is
+// always worked out on read as this reading minus the immediately
+// preceding one for the same meter, never stored, so correcting an old
+// reading automatically recalculates every period after it.
+model WaterMeterReading {
+  id      String   @id @default(cuid())
+  meterId String
+  date    DateTime @db.Date
+  reading Float
+  notes   String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  meter     WaterMeter @relation(fields: [meterId], references: [id], onDelete: Cascade)
+  createdBy User?      @relation(fields: [createdById], references: [id])
+
+  @@unique([meterId, date])
 }
 
 // A milking herd/mob — "A", "B", "C" on Burnview, "EA" on Everfair, "SA"/"SB"

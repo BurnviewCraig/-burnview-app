@@ -122,6 +122,22 @@ export type IrrigationRun = {
 
 export type IrrigationConflict = { paddockCode: string; groupName: string; date: string };
 
+export type WaterMeter = {
+  id: string;
+  farmId: string;
+  name: string;
+  groupName: string;
+  sortOrder: number;
+};
+
+export type WaterMeterReading = {
+  id: string;
+  meterId: string;
+  date: string;
+  reading: number;
+  notes: string | null;
+};
+
 export type StockItem = {
   id: string;
   kind: "FEED" | "LAND_INPUT" | "DAIRY";

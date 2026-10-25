@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, ChevronLeft, ChevronRight, Droplet, Pencil, Printer, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ChevronLeft, ChevronRight, Droplet, Gauge, Pencil, Printer, Trash2, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { AccessGate } from "@/components/AccessGate";
@@ -126,7 +127,15 @@ export default function IrrigationPage() {
   return (
     <AccessGate section="farm" title="Irrigation">
     <div className="screen">
-      <Header title="Irrigation" backHref="/farm" />
+      <Header
+        title="Irrigation"
+        backHref="/farm"
+        action={
+          <Link href="/farm/irrigation/water-meters" className="link-btn no-print" title="Water meters">
+            <Gauge size={16} strokeWidth={1.75} style={{ verticalAlign: "-3px" }} />
+          </Link>
+        }
+      />
 
       <div className="tabs no-print">
         <button className={`tab${farmFilter === "all" ? " active" : ""}`} onClick={() => setFarmFilter("all")}>All</button>
