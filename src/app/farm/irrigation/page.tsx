@@ -12,10 +12,24 @@ import type { Farm, Pivot, IrrigationRun, IrrigationConflict } from "@/lib/types
 
 const WEEK_LENGTH = 7;
 
-// Speed is inverse to depth — running slower (a lower %) passes more water.
+// Speed is inverse to depth and to duration — running slower (a lower %)
+// passes more water and takes longer to complete.
 function mmForRun(pivot: Pivot, percentage: number) {
   if (pivot.mmAt100Pct == null || percentage <= 0) return null;
   return Math.round(((pivot.mmAt100Pct * 100) / percentage) * 10) / 10;
+}
+
+function hoursForRun(pivot: Pivot, percentage: number) {
+  if (pivot.hoursAt100Pct == null || percentage <= 0) return null;
+  return (pivot.hoursAt100Pct * 100) / percentage;
+}
+
+function formatDuration(hours: number) {
+  const days = Math.floor(hours / 24);
+  const rem = Math.round(hours % 24);
+  if (days === 0) return `${rem}h`;
+  if (rem === 0) return `${days}d`;
+  return `${days}d ${rem}h`;
 }
 
 function dayLabel(date: string) {
@@ -127,7 +141,7 @@ export default function IrrigationPage() {
                 farm={farms.find((f) => f.id === p.farmId)}
                 runs={runsByPivot.get(p.id) ?? []}
                 mmWeek={mmWeekFor(p)}
-                conflicts={conflicts[p.id] ?? []}
+                conflicts={conflicts}
                 onAddRun={() => setActive({ pivot: p, run: "new" })}
                 onEditRun={(run) => setActive({ pivot: p, run })}
                 onEditRating={() => setRatingPivot(p)}
@@ -180,27 +194,38 @@ export default function IrrigationPage() {
               <p className="irrigation-title-print" style={{ fontSize: 12 }}>{g.farmName}</p>
               <table className="timebook-table">
                 <thead>
-                  <tr><th>Pivot</th><th>Start day</th><th>Start camp</th><th>%</th><th>mm</th></tr>
+                  <tr><th>Pivot</th><th>Start day</th><th>Start camp</th><th>%</th><th>mm</th><th>Takes</th><th>Note</th></tr>
                 </thead>
                 <tbody>
                   {g.pivots.flatMap((p) => {
                     const list = runsByPivot.get(p.id) ?? [];
                     if (!list.length) {
-                      return [<tr key={p.id}><td>{p.name}</td><td colSpan={4}>No run scheduled</td></tr>];
+                      return [<tr key={p.id}><td>{p.name}</td><td colSpan={6}>No run scheduled</td></tr>];
                     }
-                    return list.map((r) => (
-                      <tr key={r.id}>
-                        <td>{p.name}</td>
-                        <td>{dayLabel(r.date)}</td>
-                        <td>{r.startPaddock?.code ?? "—"}</td>
-                        <td>{r.percentage}%</td>
-                        <td>{mmForRun(p, r.percentage) ?? "—"}</td>
-                      </tr>
-                    ));
+                    return list.map((r) => {
+                      const hours = hoursForRun(p, r.percentage);
+                      const runConflicts = conflicts[r.id] ?? [];
+                      return (
+                        <tr key={r.id}>
+                          <td>{p.name}</td>
+                          <td>{dayLabel(r.date)}</td>
+                          <td>{r.startPaddock?.code ?? "—"}</td>
+                          <td>{r.percentage}%</td>
+                          <td>{mmForRun(p, r.percentage) ?? "—"}</td>
+                          <td>{hours != null ? formatDuration(hours) : "—"}</td>
+                          <td>
+                            {runConflicts.length > 0
+                              ? `Reaches ${runConflicts.map((c) => `${c.paddockCode} (${c.groupName})`).join(", ")} while still grazing`
+                              : ""}
+                          </td>
+                        </tr>
+                      );
+                    });
                   })}
                   <tr>
                     <td colSpan={4} style={{ fontWeight: 700 }}>{g.farmName} total</td>
                     <td style={{ fontWeight: 700 }}>{Math.round(g.pivots.reduce((s, p) => s + (mmWeekFor(p) ?? 0), 0) * 10) / 10}</td>
+                    <td colSpan={2}></td>
                   </tr>
                 </tbody>
               </table>
@@ -225,21 +250,11 @@ function PivotCard({
   farm: Farm | undefined;
   runs: IrrigationRun[];
   mmWeek: number | null;
-  conflicts: IrrigationConflict[];
+  conflicts: Record<string, IrrigationConflict[]>;
   onAddRun: () => void;
   onEditRun: (run: IrrigationRun) => void;
   onEditRating: () => void;
 }) {
-  const uniqueConflicts = useMemo(() => {
-    const seen = new Set<string>();
-    return conflicts.filter((c) => {
-      const key = `${c.paddockCode}|${c.groupName}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [conflicts]);
-
   return (
     <div className="settings-row">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -255,21 +270,27 @@ function PivotCard({
         Camps {pivot.paddockCodes[0]}–{pivot.paddockCodes[pivot.paddockCodes.length - 1]}
       </p>
 
-      {uniqueConflicts.length > 0 && (
-        <p className="ds-note" style={{ color: "var(--flagged)", fontWeight: 700, margin: "0 0 4px" }}>
-          ⚠ Cows grazing {uniqueConflicts.map((c) => `${c.paddockCode} (${c.groupName})`).join(", ")} this week
-        </p>
-      )}
-
       {runs.length === 0 && <p className="ds-note" style={{ margin: "4px 0" }}>No run scheduled this week.</p>}
-      {runs.map((r) => (
-        <button key={r.id} className="walk-row" onClick={() => onEditRun(r)}>
-          <span className="wr-code">{dayLabel(r.date)}</span>
-          <span className="field-editor-sub">
-            {r.startPaddock ? `Start at ${r.startPaddock.code}` : "No start camp set"} · {r.percentage}% · {mmForRun(pivot, r.percentage) ?? "—"}mm
-          </span>
-        </button>
-      ))}
+      {runs.map((r) => {
+        const hours = hoursForRun(pivot, r.percentage);
+        const runConflicts = conflicts[r.id] ?? [];
+        return (
+          <div key={r.id}>
+            <button className="walk-row" onClick={() => onEditRun(r)}>
+              <span className="wr-code">{dayLabel(r.date)}</span>
+              <span className="field-editor-sub">
+                {r.startPaddock ? `Start at ${r.startPaddock.code}` : "No start camp set"} · {r.percentage}% · {mmForRun(pivot, r.percentage) ?? "—"}mm
+                {hours != null ? ` · ${formatDuration(hours)} to complete` : ""}
+              </span>
+            </button>
+            {runConflicts.length > 0 && (
+              <p className="ds-note" style={{ color: "var(--flagged)", fontWeight: 700, margin: "0 0 6px" }}>
+                ⚠ Reaches {runConflicts.map((c) => `${c.paddockCode} (${c.groupName}) on ${dayLabel(c.date)}`).join(", ")} while still grazing
+              </p>
+            )}
+          </div>
+        );
+      })}
       <button className="link-btn" onClick={onAddRun} style={{ marginTop: 6 }}>+ Add run</button>
     </div>
   );
@@ -303,6 +324,7 @@ function RunEditor({
   const pct = Number(percentage);
   const validPct = percentage !== "" && pct > 0 && pct <= 100;
   const mm = validPct ? mmForRun(pivot, pct) : null;
+  const hours = validPct ? hoursForRun(pivot, pct) : null;
 
   const handleSave = async () => {
     if (!date || !validPct) return;
@@ -356,7 +378,13 @@ function RunEditor({
           <label className="field">
             <span className="field-label">Speed (%)</span>
             <input className="field-input small" type="number" min={1} max={100} value={percentage} onChange={(e) => setPercentage(e.target.value)} placeholder="e.g. 60" />
-            {mm != null && <span className="field-hint">≈ {mm}mm this pass</span>}
+            {(mm != null || hours != null) && (
+              <span className="field-hint">
+                {mm != null ? `≈ ${mm}mm this pass` : ""}
+                {mm != null && hours != null ? " · " : ""}
+                {hours != null ? `takes ${formatDuration(hours)} to complete` : ""}
+              </span>
+            )}
           </label>
 
           <label className="field">
@@ -383,7 +411,8 @@ function RunEditor({
 }
 
 function RatingEditor({ pivot, onClose, onSaved }: { pivot: Pivot; onClose: () => void; onSaved: () => void }) {
-  const [value, setValue] = useState(pivot.mmAt100Pct != null ? String(pivot.mmAt100Pct) : "");
+  const [mmValue, setMmValue] = useState(pivot.mmAt100Pct != null ? String(pivot.mmAt100Pct) : "");
+  const [hoursValue, setHoursValue] = useState(pivot.hoursAt100Pct != null ? String(pivot.hoursAt100Pct) : "");
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -391,7 +420,10 @@ function RatingEditor({ pivot, onClose, onSaved }: { pivot: Pivot; onClose: () =
     await fetch(`/api/pivots/${pivot.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mmAt100Pct: value === "" ? null : Number(value) }),
+      body: JSON.stringify({
+        mmAt100Pct: mmValue === "" ? null : Number(mmValue),
+        hoursAt100Pct: hoursValue === "" ? null : Number(hoursValue),
+      }),
     });
     setSaving(false);
     onSaved();
@@ -417,11 +449,25 @@ function RatingEditor({ pivot, onClose, onSaved }: { pivot: Pivot; onClose: () =
               className="field-input small"
               type="text"
               inputMode="decimal"
-              value={value}
-              onChange={(e) => setValue(sanitizeDecimalInput(e.target.value))}
+              value={mmValue}
+              onChange={(e) => setMmValue(sanitizeDecimalInput(e.target.value))}
               placeholder="e.g. 6"
             />
             <span className="field-hint">Running slower than 100% puts down more water — mm for a run is this × 100 ÷ speed%.</span>
+          </label>
+          <label className="field">
+            <span className="field-label">Hours for a full pass at 100% speed</span>
+            <input
+              className="field-input small"
+              type="text"
+              inputMode="decimal"
+              value={hoursValue}
+              onChange={(e) => setHoursValue(sanitizeDecimalInput(e.target.value))}
+              placeholder="e.g. 48"
+            />
+            <span className="field-hint">
+              Used to work out which day the pivot reaches each camp from its start camp, and to warn if that lands while cows are still grazing there.
+            </span>
           </label>
           <div className="edit-entry-actions">
             <button className="save-btn" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save"}</button>

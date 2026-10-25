@@ -105,6 +105,7 @@ export type Pivot = {
   name: string;
   paddockCodes: string[];
   mmAt100Pct: number | null;
+  hoursAt100Pct: number | null;
   sortOrder: number;
 };
 

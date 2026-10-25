@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Pivot" ADD COLUMN     "hoursAt100Pct" DOUBLE PRECISION;
