@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Pencil, Printer, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Droplet, Pencil, Printer, Trash2, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
@@ -31,6 +31,15 @@ function formatDuration(hours: number) {
   if (rem === 0) return `${days}d`;
   return `${days}d ${rem}h`;
 }
+
+function clampPct(pct: number) {
+  return Math.min(100, Math.max(1, pct));
+}
+
+// mm is how the farm actually thinks about a run, so it's the field someone
+// fills in — speed % is derived from it and shown as a readout, not typed
+// in directly, when the pivot has a rating to invert.
+const MM_PRESETS = [5, 8, 10, 12, 15, 20, 25, 30];
 
 function dayLabel(date: string) {
   return new Date(date.slice(0, 10) + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
@@ -133,32 +142,33 @@ export default function IrrigationPage() {
         {farmGroups.length === 0 && <p className="ds-note" style={{ padding: "12px 18px" }}>No pivots set up.</p>}
         {farmGroups.map((g) => (
           <div key={g.farmId}>
-            <p className="field-label" style={{ padding: "14px 18px 0" }}>{g.farmName}</p>
-            {g.pivots.map((p) => (
-              <PivotCard
-                key={p.id}
-                pivot={p}
-                farm={farms.find((f) => f.id === p.farmId)}
-                runs={runsByPivot.get(p.id) ?? []}
-                mmWeek={mmWeekFor(p)}
-                conflicts={conflicts}
-                onAddRun={() => setActive({ pivot: p, run: "new" })}
-                onEditRun={(run) => setActive({ pivot: p, run })}
-                onEditRating={() => setRatingPivot(p)}
-              />
-            ))}
-            <div className="settings-row" style={{ flexDirection: "row", justifyContent: "space-between", fontWeight: 700 }}>
+            <p className="field-label" style={{ padding: "10px 18px 0" }}>{g.farmName}</p>
+            <div className="irrigation-grid">
+              {g.pivots.map((p) => (
+                <PivotCard
+                  key={p.id}
+                  pivot={p}
+                  runs={runsByPivot.get(p.id) ?? []}
+                  mmWeek={mmWeekFor(p)}
+                  conflicts={conflicts}
+                  onAddRun={() => setActive({ pivot: p, run: "new" })}
+                  onEditRun={(run) => setActive({ pivot: p, run })}
+                  onEditRating={() => setRatingPivot(p)}
+                />
+              ))}
+            </div>
+            <div className="irrigation-total-row">
               <span>{g.farmName} total</span>
-              <span>{Math.round(g.pivots.reduce((s, p) => s + (mmWeekFor(p) ?? 0), 0) * 10) / 10} mm/week</span>
+              <span className="pivot-card-mm"><Droplet size={11} />{Math.round(g.pivots.reduce((s, p) => s + (mmWeekFor(p) ?? 0), 0) * 10) / 10} mm/week</span>
             </div>
           </div>
         ))}
         {farmGroups.length > 0 && (
-          <div className="settings-row" style={{ flexDirection: "row", justifyContent: "space-between", fontWeight: 700, borderTop: "1px solid var(--paper-deep)" }}>
+          <div className="irrigation-total-row grand">
             <span>All farms</span>
-            <span>
+            <span className="pivot-card-mm"><Droplet size={11} />
               {grandTotal.total} mm/week
-              {grandTotal.missing > 0 ? ` (${grandTotal.missing} pivot${grandTotal.missing > 1 ? "s" : ""} without a rating set)` : ""}
+              {grandTotal.missing > 0 ? ` (${grandTotal.missing} without a rating)` : ""}
             </span>
           </div>
         )}
@@ -247,7 +257,6 @@ function PivotCard({
   onEditRating,
 }: {
   pivot: Pivot;
-  farm: Farm | undefined;
   runs: IrrigationRun[];
   mmWeek: number | null;
   conflicts: Record<string, IrrigationConflict[]>;
@@ -255,43 +264,55 @@ function PivotCard({
   onEditRun: (run: IrrigationRun) => void;
   onEditRating: () => void;
 }) {
-  return (
-    <div className="settings-row">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span className="settings-row-title">{pivot.name}</span>
-        <span style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontWeight: 700 }}>{mmWeek != null ? `${mmWeek} mm/week` : "no rating set"}</span>
-          <button className="link-btn" onClick={onEditRating} aria-label={`Edit ${pivot.name} rating`}>
-            <Pencil size={13} strokeWidth={1.75} />
-          </button>
-        </span>
-      </div>
-      <p className="ds-note" style={{ margin: "0 0 4px" }}>
-        Camps {pivot.paddockCodes[0]}–{pivot.paddockCodes[pivot.paddockCodes.length - 1]}
-      </p>
+  const campRange = pivot.paddockCodes.length > 1
+    ? `Camps ${pivot.paddockCodes[0]}–${pivot.paddockCodes[pivot.paddockCodes.length - 1]}`
+    : `Camp ${pivot.paddockCodes[0] ?? "—"}`;
 
-      {runs.length === 0 && <p className="ds-note" style={{ margin: "4px 0" }}>No run scheduled this week.</p>}
-      {runs.map((r) => {
-        const hours = hoursForRun(pivot, r.percentage);
-        const runConflicts = conflicts[r.id] ?? [];
-        return (
-          <div key={r.id}>
-            <button className="walk-row" onClick={() => onEditRun(r)}>
-              <span className="wr-code">{dayLabel(r.date)}</span>
-              <span className="field-editor-sub">
-                {r.startPaddock ? `Start at ${r.startPaddock.code}` : "No start camp set"} · {r.percentage}% · {mmForRun(pivot, r.percentage) ?? "—"}mm
-                {hours != null ? ` · ${formatDuration(hours)} to complete` : ""}
-              </span>
-            </button>
-            {runConflicts.length > 0 && (
-              <p className="ds-note" style={{ color: "var(--flagged)", fontWeight: 700, margin: "0 0 6px" }}>
-                ⚠ Reaches {runConflicts.map((c) => `${c.paddockCode} (${c.groupName}) on ${dayLabel(c.date)}`).join(", ")} while still grazing
-              </p>
-            )}
-          </div>
-        );
-      })}
-      <button className="link-btn" onClick={onAddRun} style={{ marginTop: 6 }}>+ Add run</button>
+  return (
+    <div className="pivot-card">
+      <div className="pivot-card-head">
+        <span className="pivot-card-name" title={campRange}>{pivot.name}</span>
+        {mmWeek != null ? (
+          <span className="pivot-card-mm"><Droplet size={10} />{mmWeek}mm/wk</span>
+        ) : (
+          <span className="pivot-card-mm" style={{ color: "var(--ink-soft)", background: "var(--paper-deep)" }}>no rating</span>
+        )}
+        <button className="link-btn pivot-card-edit" onClick={onEditRating} aria-label={`Edit ${pivot.name} rating`}>
+          <Pencil size={12} strokeWidth={1.75} />
+        </button>
+      </div>
+
+      {runs.length === 0 ? (
+        <div className="pivot-run-row empty">
+          <span>No run this week</span>
+          <button className="link-btn" onClick={onAddRun}>+ Add</button>
+        </div>
+      ) : (
+        <>
+          {runs.map((r) => {
+            const hours = hoursForRun(pivot, r.percentage);
+            const runConflicts = conflicts[r.id] ?? [];
+            const conflictTitle = runConflicts.length
+              ? `Reaches ${runConflicts.map((c) => `${c.paddockCode} (${c.groupName}) on ${dayLabel(c.date)}`).join(", ")} while still grazing`
+              : undefined;
+            return (
+              <button key={r.id} className="pivot-run-row" onClick={() => onEditRun(r)}>
+                <span className="pivot-run-day">{dayLabel(r.date)}</span>
+                <span className="pivot-run-detail">
+                  {r.startPaddock?.code ?? "no camp"} · {r.percentage}% · <span className="pivot-run-mm">{mmForRun(pivot, r.percentage) ?? "—"}mm</span>
+                  {hours != null ? ` · ${formatDuration(hours)}` : ""}
+                </span>
+                {runConflicts.length > 0 && (
+                  <span className="pivot-run-warn" title={conflictTitle}>
+                    <AlertTriangle size={13} />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          <button className="link-btn pivot-add-btn" onClick={onAddRun}>+ Add run</button>
+        </>
+      )}
     </div>
   );
 }
@@ -313,23 +334,30 @@ function RunEditor({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const hasRating = pivot.mmAt100Pct != null;
   const [date, setDate] = useState(run?.date.slice(0, 10) ?? weekStart);
-  const [percentage, setPercentage] = useState(run ? String(run.percentage) : "");
+  const [mm, setMm] = useState(hasRating && run ? String(mmForRun(pivot, run.percentage) ?? "") : "");
+  const [percentage, setPercentage] = useState(!hasRating && run ? String(run.percentage) : "");
   const [startPaddockId, setStartPaddockId] = useState(run?.startPaddockId ?? "");
   const [notes, setNotes] = useState(run?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const pct = Number(percentage);
-  const validPct = percentage !== "" && pct > 0 && pct <= 100;
-  const mm = validPct ? mmForRun(pivot, pct) : null;
-  const hours = validPct ? hoursForRun(pivot, pct) : null;
+  // When the pivot has a mm rating, mm is what's typed and % is derived
+  // from it (inverted — see mmForRun); otherwise fall back to typing % directly.
+  const mmNum = Number(mm);
+  const computedPct = hasRating && mm !== "" && mmNum > 0 ? clampPct(Math.round((pivot.mmAt100Pct! * 100) / mmNum)) : null;
+  const typedPct = !hasRating && percentage !== "" ? Number(percentage) : null;
+  const effectivePct = hasRating ? computedPct : typedPct;
+  const validPct = effectivePct != null && effectivePct > 0 && effectivePct <= 100;
+  const actualMm = validPct ? mmForRun(pivot, effectivePct!) : null;
+  const hours = validPct ? hoursForRun(pivot, effectivePct!) : null;
 
   const handleSave = async () => {
     if (!date || !validPct) return;
     setSaving(true);
-    const body = { date, percentage: pct, startPaddockId: startPaddockId || null, notes: notes.trim() };
+    const body = { date, percentage: effectivePct, startPaddockId: startPaddockId || null, notes: notes.trim() };
     if (run) {
       await fetch(`/api/irrigation-runs/${run.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     } else {
@@ -375,17 +403,45 @@ function RunEditor({
             </select>
           </label>
 
-          <label className="field">
-            <span className="field-label">Speed (%)</span>
-            <input className="field-input small" type="number" min={1} max={100} value={percentage} onChange={(e) => setPercentage(e.target.value)} placeholder="e.g. 60" />
-            {(mm != null || hours != null) && (
-              <span className="field-hint">
-                {mm != null ? `≈ ${mm}mm this pass` : ""}
-                {mm != null && hours != null ? " · " : ""}
-                {hours != null ? `takes ${formatDuration(hours)} to complete` : ""}
-              </span>
-            )}
-          </label>
+          {hasRating ? (
+            <label className="field">
+              <span className="field-label">mm to put down</span>
+              <div className="chip-wrap">
+                {MM_PRESETS.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={`paddock-chip fert-chip${mm === String(v) ? " on" : ""}`}
+                    onClick={() => setMm(String(v))}
+                  >
+                    {v}mm
+                  </button>
+                ))}
+              </div>
+              <input
+                className="field-input small"
+                type="text"
+                inputMode="decimal"
+                value={mm}
+                onChange={(e) => setMm(sanitizeDecimalInput(e.target.value))}
+                placeholder="or type a custom mm"
+                style={{ marginTop: 6 }}
+              />
+              {computedPct != null && (
+                <span className="field-hint">
+                  ≈ {computedPct}% speed
+                  {actualMm != null && Math.abs(actualMm - mmNum) > 0.05 ? ` (closest is ${actualMm}mm at that speed)` : ""}
+                  {hours != null ? ` · takes ${formatDuration(hours)} to complete` : ""}
+                </span>
+              )}
+            </label>
+          ) : (
+            <label className="field">
+              <span className="field-label">Speed (%)</span>
+              <input className="field-input small" type="number" min={1} max={100} value={percentage} onChange={(e) => setPercentage(e.target.value)} placeholder="e.g. 60" />
+              <span className="field-hint">Set the pivot&apos;s mm rating (pencil icon on its card) to size runs by mm instead.</span>
+            </label>
+          )}
 
           <label className="field">
             <span className="field-label">Notes</span>
