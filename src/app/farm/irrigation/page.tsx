@@ -82,6 +82,24 @@ export default function IrrigationPage() {
     return Math.round(list.reduce((s, r) => s + (mmForRun(pivot, r.percentage) ?? 0), 0) * 10) / 10;
   };
 
+  // A pivot's wetted area — the combined size of the camps it covers —
+  // read off the same paddock records the camps/maize fields already use.
+  // mm is a depth, not a volume, so turning it into m³ needs this: 1mm over
+  // 1ha is 10 m³ (1ha = 10,000 m², 1mm = 0.001m).
+  const pivotAreaHa = (pivot: Pivot) => {
+    const farm = farms.find((f) => f.id === pivot.farmId);
+    if (!farm) return null;
+    const codes = new Set(pivot.paddockCodes);
+    const total = farm.paddocks.filter((p) => codes.has(p.code)).reduce((s, p) => s + (p.sizeHa ?? 0), 0);
+    return total > 0 ? total : null;
+  };
+  const cubesWeekFor = (pivot: Pivot) => {
+    const mm = mmWeekFor(pivot);
+    const area = pivotAreaHa(pivot);
+    if (mm == null || area == null) return null;
+    return mm * area * 10;
+  };
+
   const farmGroups = useMemo(() => {
     const byFarm = new Map<string, { farmId: string; farmName: string; pivots: Pivot[] }>();
     pivots
@@ -94,17 +112,33 @@ export default function IrrigationPage() {
     return [...byFarm.values()];
   }, [pivots, farmFilter]);
 
-  const grandTotal = useMemo(() => {
-    let total = 0;
+  // mm/week is a depth, so combining several pivots' figures is an average
+  // (mm applied per pivot), never a sum — a farm running one pivot at 10mm
+  // and another at 20mm isn't putting down 30mm anywhere. Cubes (m³), being
+  // a volume, DO add up across pivots — that's the real total water used.
+  const farmTotal = (farmPivots: Pivot[]) => {
+    let mmSum = 0;
+    let cubesSum = 0;
     let missing = 0;
-    farmGroups.forEach((g) => g.pivots.forEach((p) => {
+    farmPivots.forEach((p) => {
       const mm = mmWeekFor(p);
       if (mm == null) missing++;
-      else total += mm;
-    }));
-    return { total: Math.round(total * 10) / 10, missing };
+      else mmSum += mm;
+      const cubes = cubesWeekFor(p);
+      if (cubes != null) cubesSum += cubes;
+    });
+    return {
+      avgMm: farmPivots.length ? Math.round((mmSum / farmPivots.length) * 10) / 10 : 0,
+      cubes: Math.round(cubesSum),
+      missing,
+    };
+  };
+
+  const grandTotal = useMemo(() => {
+    const allPivots = farmGroups.flatMap((g) => g.pivots);
+    return farmTotal(allPivots);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [farmGroups, runsByPivot]);
+  }, [farmGroups, runsByPivot, farms]);
 
   const [active, setActive] = useState<{ pivot: Pivot; run: IrrigationRun | "new" } | null>(null);
   const [ratingPivot, setRatingPivot] = useState<Pivot | null>(null);
@@ -120,7 +154,7 @@ export default function IrrigationPage() {
 
   if (farmsLoading || pivotsLoading) return (
     <AccessGate section="farm" title="Irrigation">
-      <div className="screen"><Header title="Irrigation" backHref="/farm" /><Spinner /></div>
+      <div className="screen"><Header title="Irrigation" backHref="/" /><Spinner /></div>
     </AccessGate>
   );
 
@@ -129,10 +163,11 @@ export default function IrrigationPage() {
     <div className="screen">
       <Header
         title="Irrigation"
-        backHref="/farm"
+        backHref="/"
         action={
-          <Link href="/farm/irrigation/water-meters" className="link-btn no-print" title="Water meters">
-            <Gauge size={16} strokeWidth={1.75} style={{ verticalAlign: "-3px" }} />
+          <Link href="/farm/irrigation/water-meters" className="hdr-action no-print">
+            <Gauge size={14} strokeWidth={1.75} />
+            Water meters
           </Link>
         }
       />
@@ -174,16 +209,23 @@ export default function IrrigationPage() {
             </div>
             <div className="irrigation-total-row">
               <span>{g.farmName} total</span>
-              <span className="pivot-card-mm"><Droplet size={11} />{Math.round(g.pivots.reduce((s, p) => s + (mmWeekFor(p) ?? 0), 0) * 10) / 10} mm/week</span>
+              <span style={{ display: "flex", gap: 6 }}>
+                <span className="pivot-card-mm"><Droplet size={11} />{farmTotal(g.pivots).avgMm} mm/week avg</span>
+                <span className="pivot-card-mm">{farmTotal(g.pivots).cubes.toLocaleString()} m³/week</span>
+              </span>
             </div>
           </div>
         ))}
         {farmGroups.length > 0 && (
           <div className="irrigation-total-row grand">
             <span>All farms</span>
-            <span className="pivot-card-mm"><Droplet size={11} />
-              {grandTotal.total} mm/week
-              {grandTotal.missing > 0 ? ` (${grandTotal.missing} without a rating)` : ""}
+            <span style={{ display: "flex", gap: 6 }}>
+              <span className="pivot-card-mm">
+                <Droplet size={11} />
+                {grandTotal.avgMm} mm/week avg
+                {grandTotal.missing > 0 ? ` (${grandTotal.missing} without a rating)` : ""}
+              </span>
+              <span className="pivot-card-mm">{grandTotal.cubes.toLocaleString()} m³/week</span>
             </span>
           </div>
         )}
@@ -249,8 +291,8 @@ export default function IrrigationPage() {
                   })}
                   <tr>
                     <td colSpan={4} style={{ fontWeight: 700 }}>{g.farmName} total</td>
-                    <td style={{ fontWeight: 700 }}>{Math.round(g.pivots.reduce((s, p) => s + (mmWeekFor(p) ?? 0), 0) * 10) / 10}</td>
-                    <td colSpan={2}></td>
+                    <td style={{ fontWeight: 700 }}>{farmTotal(g.pivots).avgMm} avg</td>
+                    <td colSpan={2} style={{ fontWeight: 700 }}>{farmTotal(g.pivots).cubes.toLocaleString()} m³/week</td>
                   </tr>
                 </tbody>
               </table>
