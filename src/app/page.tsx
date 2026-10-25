@@ -8,7 +8,7 @@ import { useApi } from "@/lib/useApi";
 import { todayStr } from "@/lib/utils";
 import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale } from "@/lib/calendarFormat";
 import { dueLabel } from "@/lib/diaryFormat";
-import { CalendarColorIcon, FarmColorIcon, CattleColorIcon, GrassColorIcon, StocksColorIcon, DieselColorIcon } from "@/components/HomeIcons";
+import { CalendarColorIcon, FarmColorIcon, CattleColorIcon, GrassColorIcon, StocksColorIcon, DieselColorIcon, IrrigationColorIcon } from "@/components/HomeIcons";
 import type { DiaryEntry } from "@/lib/types";
 
 const WIDGET_DAYS = 4; // today + previous 3 — fits comfortably in the card's width
@@ -104,6 +104,11 @@ export default function HomePage() {
           <FarmColorIcon size={30} />
           <span className="hc-title">Farm</span>
           <span className="hc-sub">Map &amp; field activities</span>
+        </Link>
+        <Link className="home-card" href="/farm/irrigation">
+          <IrrigationColorIcon size={30} />
+          <span className="hc-title">Irrigation</span>
+          <span className="hc-sub">Pivot schedule &amp; mm/week</span>
         </Link>
         <Link className="home-card" href="/cattle">
           <CattleColorIcon size={30} />

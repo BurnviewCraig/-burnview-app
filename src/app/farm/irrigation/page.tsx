@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, ChevronLeft, ChevronRight, Droplet, Pencil, Printer, Trash2, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
+import { AccessGate } from "@/components/AccessGate";
 import { useApi } from "@/lib/useApi";
 import { todayStr, byPaddockNumber, sanitizeDecimalInput } from "@/lib/utils";
 import { addDays } from "@/lib/calendarFormat";
@@ -116,9 +117,14 @@ export default function IrrigationPage() {
     return () => { clearTimeout(t); window.removeEventListener("afterprint", after); };
   }, [printing]);
 
-  if (farmsLoading || pivotsLoading) return <div className="screen"><Header title="Irrigation" backHref="/farm" /><Spinner /></div>;
+  if (farmsLoading || pivotsLoading) return (
+    <AccessGate section="farm" title="Irrigation">
+      <div className="screen"><Header title="Irrigation" backHref="/farm" /><Spinner /></div>
+    </AccessGate>
+  );
 
   return (
+    <AccessGate section="farm" title="Irrigation">
     <div className="screen">
       <Header title="Irrigation" backHref="/farm" />
 
@@ -244,6 +250,7 @@ export default function IrrigationPage() {
         </div>
       )}
     </div>
+    </AccessGate>
   );
 }
 

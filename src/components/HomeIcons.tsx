@@ -81,6 +81,21 @@ export function DieselColorIcon({ size = 30 }: IconProps) {
   );
 }
 
+export function IrrigationColorIcon({ size = 30 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="11.1" y="3" width="1.8" height="11" fill="#5C86A8" />
+      <circle cx="12" cy="3" r="2" fill="#2E6F95" />
+      <path d="M3 14 L21 14" stroke="#232A1E" strokeWidth="1" />
+      <circle cx="3" cy="14" r="1.3" fill="#232A1E" />
+      <circle cx="21" cy="14" r="1.3" fill="#232A1E" />
+      <path d="M6.5 17.5c0-1.7 1.2-3 1.2-3s1.2 1.3 1.2 3a1.2 1.2 0 01-2.4 0z" fill="#5C86A8" />
+      <path d="M11 18.3c0-2.1 1.5-3.8 1.5-3.8s1.5 1.7 1.5 3.8a1.5 1.5 0 01-3 0z" fill="#2E6F95" />
+      <path d="M15.8 17.5c0-1.7 1.2-3 1.2-3s1.2 1.3 1.2 3a1.2 1.2 0 01-2.4 0z" fill="#5C86A8" />
+    </svg>
+  );
+}
+
 export function StocksColorIcon({ size = 30 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
