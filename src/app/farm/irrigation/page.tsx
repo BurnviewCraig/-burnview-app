@@ -47,11 +47,32 @@ function dayLabel(date: string) {
   return new Date(date.slice(0, 10) + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 }
 
+const WEEKDAY_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTH_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// "Monday 27 July" — spelled out manually rather than via toLocaleDateString
+// so the format is exact regardless of the browser's locale.
+function mondayLabel(date: string) {
+  const d = new Date(date.slice(0, 10) + "T00:00:00Z");
+  return `${WEEKDAY_LONG[d.getUTCDay()]} ${d.getUTCDate()} ${MONTH_LONG[d.getUTCMonth()]}`;
+}
+
+// Schedules always run Monday-Sunday, not "today + 6 days" — so the anchor
+// itself is always a Monday, and paging by a week always lands on one too.
+function mondayOf(date: string): string {
+  const dow = new Date(date.slice(0, 10) + "T00:00:00Z").getUTCDay(); // 0=Sun..6=Sat
+  const diff = dow === 0 ? -6 : 1 - dow;
+  return addDays(date, diff);
+}
+
 export default function IrrigationPage() {
   const today = todayStr();
-  const [anchor, setAnchor] = useState(today);
+  const thisMonday = mondayOf(today);
+  const [anchor, setAnchor] = useState(thisMonday);
   const start = anchor;
   const end = addDays(anchor, WEEK_LENGTH - 1);
+  const weeksFromNow = Math.round((new Date(anchor + "T00:00:00Z").getTime() - new Date(thisMonday + "T00:00:00Z").getTime()) / (7 * 86400000));
+  const weekLabel = weeksFromNow === 0 ? "This week" : weeksFromNow === 1 ? "Next week" : mondayLabel(anchor);
 
   const { data: farmsData, loading: farmsLoading } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
@@ -181,7 +202,7 @@ export default function IrrigationPage() {
 
       <div className="grazing-week-nav no-print">
         <button className="map-zoom-btn" onClick={() => setAnchor(addDays(anchor, -WEEK_LENGTH))} aria-label="Previous week"><ChevronLeft size={16} /></button>
-        <button className="link-btn" onClick={() => setAnchor(today)}>This week</button>
+        <button className="link-btn" onClick={() => setAnchor(thisMonday)}>{weekLabel}</button>
         <button className="map-zoom-btn" onClick={() => setAnchor(addDays(anchor, WEEK_LENGTH))} aria-label="Next week"><ChevronRight size={16} /></button>
         <button className="link-btn" style={{ marginLeft: "auto" }} onClick={() => setPrinting(true)}>
           <Printer size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} /> Print
