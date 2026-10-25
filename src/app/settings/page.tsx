@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Users, Sprout, FlaskConical, Leaf, Fuel, ChevronRight } from "lucide-react";
+import { Users, Sprout, FlaskConical, Leaf, Fuel, Droplets, Gauge, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
 import { useAccess } from "@/lib/useAccess";
 
@@ -50,6 +50,22 @@ export default function SettingsPage() {
           <div className="menu-row-text">
             <span className="mr-title">Diesel activities</span>
             <span className="mr-sub">Activity options used when logging diesel use</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+        <Link className="menu-row" href="/settings/pivots">
+          <Droplets size={18} strokeWidth={1.75} />
+          <div className="menu-row-text">
+            <span className="mr-title">Pivots</span>
+            <span className="mr-sub">mm &amp; hours per full pass at 100% speed, per pivot</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+        <Link className="menu-row" href="/settings/water-meters">
+          <Gauge size={18} strokeWidth={1.75} />
+          <div className="menu-row-text">
+            <span className="mr-title">Water meters</span>
+            <span className="mr-sub">Name &amp; billing group for each water meter</span>
           </div>
           <ChevronRight size={16} />
         </Link>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Droplet, Pencil, Trash2, X } from "lucide-react";
+import { Droplet, Trash2, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
@@ -27,7 +27,7 @@ function shortDate(date: string) {
 export default function WaterMetersPage() {
   const { data: farmsData, loading: farmsLoading } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
-  const { data: metersData, loading: metersLoading, refetch: refetchMeters } = useApi<{ meters: WaterMeter[] }>("/api/water-meters");
+  const { data: metersData, loading: metersLoading } = useApi<{ meters: WaterMeter[] }>("/api/water-meters");
   const meters = metersData?.meters ?? [];
   const { data: readingsData, refetch: refetchReadings } = useApi<{ readings: WaterMeterReading[] }>("/api/water-meter-readings");
   const readings = readingsData?.readings ?? [];
@@ -77,7 +77,6 @@ export default function WaterMetersPage() {
   }, [farms, meters, farmFilter]);
 
   const [active, setActive] = useState<{ meter: WaterMeter; reading: WaterMeterReading | "new" } | null>(null);
-  const [renaming, setRenaming] = useState<WaterMeter | null>(null);
 
   if (farmsLoading || metersLoading) return <div className="screen"><Header title="Water meters" backHref="/farm/irrigation" /><Spinner /></div>;
 
@@ -114,7 +113,6 @@ export default function WaterMetersPage() {
                       series={seriesByMeter.get(m.id) ?? []}
                       onAddReading={() => setActive({ meter: m, reading: "new" })}
                       onEditReading={(r) => setActive({ meter: m, reading: r })}
-                      onRename={() => setRenaming(m)}
                     />
                   ))}
                 </div>
@@ -133,13 +131,6 @@ export default function WaterMetersPage() {
         />
       )}
 
-      {renaming && (
-        <MeterEditor
-          meter={renaming}
-          onClose={() => setRenaming(null)}
-          onSaved={() => { setRenaming(null); refetchMeters(); }}
-        />
-      )}
     </div>
   );
 }
@@ -149,13 +140,11 @@ function MeterCard({
   series,
   onAddReading,
   onEditReading,
-  onRename,
 }: {
   meter: WaterMeter;
   series: SeriesEntry[];
   onAddReading: () => void;
   onEditReading: (r: WaterMeterReading) => void;
-  onRename: () => void;
 }) {
   const [showHistory, setShowHistory] = useState(false);
   const latest = series[series.length - 1] ?? null;
@@ -165,7 +154,6 @@ function MeterCard({
     <div className="pivot-card">
       <div className="pivot-card-head">
         <span className="pivot-card-name">{meter.name}</span>
-        <button className="pivot-card-edit" onClick={onRename} aria-label="Rename meter"><Pencil size={13} strokeWidth={1.75} /></button>
       </div>
       {latest ? (
         <button className="pivot-run-row" onClick={() => onEditReading(latest)}>
@@ -276,56 +264,6 @@ function ReadingEditor({
                 {deleting ? "Deleting…" : confirmingDelete ? "Click again to confirm" : "Delete"}
               </button>
             )}
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-function MeterEditor({ meter, onClose, onSaved }: { meter: WaterMeter; onClose: () => void; onSaved: () => void }) {
-  const [name, setName] = useState(meter.name);
-  const [groupName, setGroupName] = useState(meter.groupName);
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!name.trim() || !groupName.trim()) return;
-    setSaving(true);
-    await fetch(`/api/water-meters/${meter.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), groupName: groupName.trim() }),
-    });
-    setSaving(false);
-    onSaved();
-  };
-
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-
-  return createPortal(
-    <div className="edit-entry-overlay" onClick={onClose}>
-      <div className="edit-entry-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="keypad-header">
-          <div className="stock-panel-title">
-            <span className="keypad-code">Edit meter</span>
-          </div>
-          <X size={18} className="close" onClick={onClose} />
-        </div>
-        <div className="edit-entry-body">
-          <label className="field">
-            <span className="field-label">Name</span>
-            <input className="field-input small" type="text" value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="field">
-            <span className="field-label">Billing group</span>
-            <input className="field-input small" type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
-            <span className="field-hint">Meters sharing the same group name are added together for the year-to-date total.</span>
-          </label>
-          <div className="edit-entry-actions">
-            <button className="save-btn" onClick={handleSave} disabled={saving || !name.trim() || !groupName.trim()}>{saving ? "Saving…" : "Save"}</button>
           </div>
         </div>
       </div>

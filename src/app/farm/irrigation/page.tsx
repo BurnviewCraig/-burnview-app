@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { AlertTriangle, ChevronLeft, ChevronRight, Droplet, Gauge, Pencil, Printer, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Droplet, Gauge, Printer, Trash2, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { AccessGate } from "@/components/AccessGate";
@@ -76,7 +76,7 @@ export default function IrrigationPage() {
 
   const { data: farmsData, loading: farmsLoading } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
-  const { data: pivotsData, loading: pivotsLoading, refetch: refetchPivots } = useApi<{ pivots: Pivot[] }>("/api/pivots");
+  const { data: pivotsData, loading: pivotsLoading } = useApi<{ pivots: Pivot[] }>("/api/pivots");
   const pivots = pivotsData?.pivots ?? [];
   const { data: runsData, refetch: refetchRuns } = useApi<{ runs: IrrigationRun[]; conflicts: Record<string, IrrigationConflict[]> }>(
     `/api/irrigation-runs?start=${start}&end=${end}`
@@ -162,7 +162,6 @@ export default function IrrigationPage() {
   }, [farmGroups, runsByPivot, farms]);
 
   const [active, setActive] = useState<{ pivot: Pivot; run: IrrigationRun | "new" } | null>(null);
-  const [ratingPivot, setRatingPivot] = useState<Pivot | null>(null);
   const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
@@ -224,7 +223,6 @@ export default function IrrigationPage() {
                   conflicts={conflicts}
                   onAddRun={() => setActive({ pivot: p, run: "new" })}
                   onEditRun={(run) => setActive({ pivot: p, run })}
-                  onEditRating={() => setRatingPivot(p)}
                 />
               ))}
             </div>
@@ -263,14 +261,6 @@ export default function IrrigationPage() {
           weekEnd={end}
           onClose={() => setActive(null)}
           onSaved={() => { setActive(null); refetchRuns(); }}
-        />
-      )}
-
-      {ratingPivot && (
-        <RatingEditor
-          pivot={ratingPivot}
-          onClose={() => setRatingPivot(null)}
-          onSaved={() => { setRatingPivot(null); refetchPivots(); }}
         />
       )}
 
@@ -333,7 +323,6 @@ function PivotCard({
   conflicts,
   onAddRun,
   onEditRun,
-  onEditRating,
 }: {
   pivot: Pivot;
   runs: IrrigationRun[];
@@ -341,7 +330,6 @@ function PivotCard({
   conflicts: Record<string, IrrigationConflict[]>;
   onAddRun: () => void;
   onEditRun: (run: IrrigationRun) => void;
-  onEditRating: () => void;
 }) {
   const campRange = pivot.paddockCodes.length > 1
     ? `Camps ${pivot.paddockCodes[0]}–${pivot.paddockCodes[pivot.paddockCodes.length - 1]}`
@@ -356,9 +344,6 @@ function PivotCard({
         ) : (
           <span className="pivot-card-mm" style={{ color: "var(--ink-soft)", background: "var(--paper-deep)" }}>no rating</span>
         )}
-        <button className="link-btn pivot-card-edit" onClick={onEditRating} aria-label={`Edit ${pivot.name} rating`}>
-          <Pencil size={12} strokeWidth={1.75} />
-        </button>
       </div>
 
       {runs.length === 0 ? (
@@ -537,75 +522,6 @@ function RunEditor({
                 {deleting ? "Deleting…" : confirmingDelete ? "Click again to confirm" : "Delete"}
               </button>
             )}
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-function RatingEditor({ pivot, onClose, onSaved }: { pivot: Pivot; onClose: () => void; onSaved: () => void }) {
-  const [mmValue, setMmValue] = useState(pivot.mmAt100Pct != null ? String(pivot.mmAt100Pct) : "");
-  const [hoursValue, setHoursValue] = useState(pivot.hoursAt100Pct != null ? String(pivot.hoursAt100Pct) : "");
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    await fetch(`/api/pivots/${pivot.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mmAt100Pct: mmValue === "" ? null : Number(mmValue),
-        hoursAt100Pct: hoursValue === "" ? null : Number(hoursValue),
-      }),
-    });
-    setSaving(false);
-    onSaved();
-  };
-
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-
-  return createPortal(
-    <div className="edit-entry-overlay" onClick={onClose}>
-      <div className="edit-entry-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="keypad-header">
-          <div className="stock-panel-title">
-            <span className="keypad-code">{pivot.name} — rating</span>
-          </div>
-          <X size={18} className="close" onClick={onClose} />
-        </div>
-        <div className="edit-entry-body">
-          <label className="field">
-            <span className="field-label">mm per pass at 100% speed</span>
-            <input
-              className="field-input small"
-              type="text"
-              inputMode="decimal"
-              value={mmValue}
-              onChange={(e) => setMmValue(sanitizeDecimalInput(e.target.value))}
-              placeholder="e.g. 6"
-            />
-            <span className="field-hint">Running slower than 100% puts down more water — mm for a run is this × 100 ÷ speed%.</span>
-          </label>
-          <label className="field">
-            <span className="field-label">Hours for a full pass at 100% speed</span>
-            <input
-              className="field-input small"
-              type="text"
-              inputMode="decimal"
-              value={hoursValue}
-              onChange={(e) => setHoursValue(sanitizeDecimalInput(e.target.value))}
-              placeholder="e.g. 48"
-            />
-            <span className="field-hint">
-              Used to work out which day the pivot reaches each camp from its start camp, and to warn if that lands while cows are still grazing there.
-            </span>
-          </label>
-          <div className="edit-entry-actions">
-            <button className="save-btn" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
           </div>
         </div>
       </div>
