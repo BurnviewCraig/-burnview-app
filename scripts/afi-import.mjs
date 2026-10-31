@@ -22,10 +22,30 @@
 // milk-sold rows are deduped by AFI's own invoice number (sourceRef), so a
 // shipment entered into AFI late and re-exported the next night won't be
 // double-counted.
+//
+// Self-catches-up: a small state file (afi-import-state.json, not committed
+// — it's per-machine runtime bookkeeping, not app data) remembers the newest
+// file timestamp already processed per source/report-type, so a night (or
+// several) where this PC was off, or the OneDrive sync feeding one of these
+// folders stalled, gets every file in between processed next time this runs
+// rather than just the latest one — without re-walking the whole history
+// every night once caught up.
 
-import { readdirSync, readFileSync } from "fs";
-import { join } from "path";
+import { readdirSync, readFileSync, writeFileSync, existsSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { PrismaClient } from "@prisma/client";
+
+const STATE_PATH = join(dirname(fileURLToPath(import.meta.url)), "afi-import-state.json");
+
+function loadState() {
+  if (!existsSync(STATE_PATH)) return {};
+  try { return JSON.parse(readFileSync(STATE_PATH, "utf-8")); } catch { return {}; }
+}
+
+function saveState(state) {
+  writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+}
 
 const SOURCES = [
   {
@@ -65,12 +85,11 @@ const SOURCES = [
 
 const prisma = new PrismaClient();
 
-function latestFile(exportDir, prefix) {
+function allFiles(exportDir, prefix) {
   const files = readdirSync(exportDir).filter((f) => f.startsWith(prefix) && f.endsWith(".csv"));
-  if (!files.length) return null;
   // "Prefix - DD-MM-YYYY HH-MM.csv" — sort by that timestamp, not just mtime,
   // so this is correct even if OneDrive re-touches file times on sync.
-  const parsed = files
+  return files
     .map((f) => {
       const m = f.match(/(\d{2})-(\d{2})-(\d{4}) (\d{2})-(\d{2})\.csv$/);
       if (!m) return null;
@@ -78,8 +97,7 @@ function latestFile(exportDir, prefix) {
       return { file: f, ts: new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:00`) };
     })
     .filter(Boolean)
-    .sort((a, b) => b.ts.getTime() - a.ts.getTime());
-  return parsed[0] ?? null;
+    .sort((a, b) => a.ts.getTime() - b.ts.getTime());
 }
 
 function ddmmyyyyToIso(d) {
@@ -87,10 +105,8 @@ function ddmmyyyyToIso(d) {
   return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
 }
 
-async function importCraigReport(source) {
+async function importCraigReport(source, found) {
   const { exportDir, groupMap } = source;
-  const found = latestFile(exportDir, "Craig Report");
-  if (!found) { console.log("No Craig Report file found."); return; }
   const date = `${found.ts.getFullYear()}-${String(found.ts.getMonth() + 1).padStart(2, "0")}-${String(found.ts.getDate()).padStart(2, "0")}`;
   console.log(`\nCraig Report: ${found.file} -> date ${date}`);
 
@@ -167,10 +183,8 @@ async function importCraigReport(source) {
   }
 }
 
-async function importMilkShipments(source) {
+async function importMilkShipments(source, found) {
   const { exportDir, tankFarm, sourceTag } = source;
-  const found = latestFile(exportDir, "Primary Milk Shipment Report");
-  if (!found) { console.log("No Primary Milk Shipment Report file found."); return; }
   console.log(`\nPrimary Milk Shipment Report: ${found.file}`);
 
   const text = readFileSync(join(exportDir, found.file), "utf-8");
@@ -232,10 +246,29 @@ async function main() {
   if (filterKey && !sources.length) {
     throw new Error(`Unknown source "${filterKey}" — expected one of: ${SOURCES.map((s) => s.key).join(", ")}`);
   }
+  const state = loadState();
+
   for (const source of sources) {
     console.log(`\n=== ${source.name} — folder: ${source.exportDir} ===`);
-    await importCraigReport(source);
-    await importMilkShipments(source);
+    const s = (state[source.key] ??= {});
+
+    const craigFiles = allFiles(source.exportDir, "Craig Report")
+      .filter((f) => !s.craigReport || f.ts.getTime() > s.craigReport);
+    if (!craigFiles.length) console.log("No new Craig Report files.");
+    for (const found of craigFiles) {
+      await importCraigReport(source, found);
+      s.craigReport = found.ts.getTime();
+      saveState(state);
+    }
+
+    const shipmentFiles = allFiles(source.exportDir, "Primary Milk Shipment Report")
+      .filter((f) => !s.shipment || f.ts.getTime() > s.shipment);
+    if (!shipmentFiles.length) console.log("No new Primary Milk Shipment Report files.");
+    for (const found of shipmentFiles) {
+      await importMilkShipments(source, found);
+      s.shipment = found.ts.getTime();
+      saveState(state);
+    }
   }
   console.log("\nDone.");
 }
