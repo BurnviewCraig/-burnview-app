@@ -1,9 +1,12 @@
 import type { MilkQualityEntry } from "./types";
 
 // Clover's tank numbers are global across the business, not per-farm —
-// Burnview has two bulk tanks, Everfair and Stockton one each.
+// Burnview has two bulk tanks, Everfair and Stockton one each. Tank 5 is a
+// synthetic entry for Burnview's milk sold to Creighton Cheese Factory
+// (out of the same two physical tanks as Clover, but tested separately by
+// the cheese factory's own lab) — see scripts/clover-import.mjs.
 export const FARM_TANKS: Record<string, number[]> = {
-  burnview: [1, 2],
+  burnview: [1, 2, 5],
   everfair: [3],
   stockton: [4],
 };

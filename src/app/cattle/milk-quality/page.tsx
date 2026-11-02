@@ -64,7 +64,7 @@ function MilkQualityPageInner() {
     <div className="screen">
       <Header title="Milk quality" backHref="/cattle" />
       <p className="ds-note" style={{ padding: "12px 18px 0" }}>
-        From Clover&apos;s weekly quality card — butterfat, protein, MUN, bactoscan and more. Burnview&apos;s two tanks are combined, weighted by each tank&apos;s litres.
+        From Clover&apos;s weekly quality card — butterfat, protein, MUN, bactoscan and more. Burnview combines its two Clover tanks and its Creighton Cheese Factory line, weighted by litres.
       </p>
 
       <div className="tabs">

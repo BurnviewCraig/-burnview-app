@@ -27,11 +27,22 @@
 // don't all have the same number of rows (Clover doesn't sample every
 // metric on every date), so there's no shared row grid to line up across
 // columns.
+//
+// Burnview also sends some of its milk to Creighton Cheese Factory (out of
+// the same two physical tanks as Clover) — their lab sends a separate
+// weekly Excel (also dropped in this folder) with its own butterfat/
+// protein/bacteria/somatic-cell readings. That's stored as a synthetic
+// "tank 5" for Burnview so it folds into the farm's litres-weighted
+// average alongside tanks 1 & 2 — see aggregateFarmQuality() in
+// src/lib/milkQuality.ts. Unlike the Clover PDFs, the cheese Excel is
+// always reprocessed (not tracked by filename) since the lab re-sends the
+// whole history weekly, often under the same filename.
 
 import { readdirSync, readFileSync, writeFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import XLSX from "xlsx";
 import { PrismaClient } from "@prisma/client";
 
 const EXPORT_DIR = process.env.CLOVER_EXPORT_DIR || "C:\\Users\\craig\\Desktop\\Clover Quality Cards";
@@ -39,7 +50,9 @@ const STATE_PATH = join(dirname(fileURLToPath(import.meta.url)), "clover-import-
 
 // Clover's tank numbers are global across the whole business, not per-farm:
 // Burnview has two bulk tanks (1 & 2), Everfair is tank 3, Stockton is 4.
-const TANK_FARM_SLUG = { 1: "burnview", 2: "burnview", 3: "everfair", 4: "stockton" };
+// Tank 5 is Burnview's synthetic "cheese factory" line (see header comment).
+const TANK_FARM_SLUG = { 1: "burnview", 2: "burnview", 3: "everfair", 4: "stockton", 5: "burnview" };
+const CHEESE_TANK_NUMBER = 5;
 
 const MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
 
@@ -199,6 +212,119 @@ function parseLitreTable(items, startMonth, startYear, endDay, tag) {
   return entries;
 }
 
+// The lab's workbook bundles several of their clients' results into one
+// file (sheets "Burnview", "Conference", "DKJ", ...) — only "Burnview" is
+// ours. Columns: Analysis Date, Week, BF (%), Protein (%), SCC (x1000),
+// IBC (x1000) — no MUN. SCC/IBC are in thousands, so ×1000 to match
+// Clover's raw count/ml units. IBC isn't the same instrument as Clover's
+// Bactoscan, but both are a bacteria-count-per-ml reading, so it's folded
+// into the same bactoscanCountPerMl field for one unified "Bactoscan"
+// figure per farm.
+//
+// Some rows have a blank Analysis Date (a second sample the same week) —
+// treated as the same date as the most recent dated row above it, and
+// averaged together with it, rather than guessed at or dropped.
+function parseCheeseSheet(workbook, tag) {
+  const sheet = workbook.Sheets["Burnview"];
+  if (!sheet) { console.warn(`  ! ${tag}: no "Burnview" sheet in this workbook — skipping`); return []; }
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+  if (!rows.length) return [];
+
+  const header = rows[0].map((h) => String(h).trim());
+  const col = (name) => header.indexOf(name);
+  const dateCol = col("Analysis Date");
+  const bfCol = col("BF (%)");
+  const proteinCol = col("Protein (%)");
+  const sccCol = col("SCC (x1000)");
+  const ibcCol = col("IBC (x1000)");
+  if ([dateCol, bfCol, proteinCol, sccCol, ibcCol].some((i) => i < 0)) {
+    console.warn(`  ! ${tag}: didn't recognize the Burnview sheet's columns — skipping`);
+    return [];
+  }
+
+  const byDate = new Map();
+  let currentDate = null;
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const rawDate = String(row[dateCol] ?? "").trim();
+    const dm = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+    if (dm) {
+      const [, dd, mm, yy] = dm;
+      currentDate = `20${yy}-${mm}-${dd}`;
+    } else if (rawDate !== "") {
+      // Unparseable date text (e.g. "No BV 08/01") — a gap, not a continuation.
+      currentDate = null;
+      continue;
+    }
+    if (!currentDate) continue;
+
+    const bf = parseFloatOrNull(row[bfCol]);
+    const protein = parseFloatOrNull(row[proteinCol]);
+    const scc = parseFloatOrNull(row[sccCol]);
+    const ibc = parseFloatOrNull(row[ibcCol]);
+    if (bf == null && protein == null && scc == null && ibc == null) continue;
+
+    const entry = byDate.get(currentDate) ?? { bf: [], protein: [], scc: [], ibc: [] };
+    if (bf != null) entry.bf.push(bf);
+    if (protein != null) entry.protein.push(protein);
+    if (scc != null) entry.scc.push(scc);
+    if (ibc != null) entry.ibc.push(ibc);
+    byDate.set(currentDate, entry);
+  }
+
+  const avg = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null);
+  return [...byDate.entries()].map(([date, v]) => ({
+    date,
+    butterfatPct: avg(v.bf),
+    proteinPct: avg(v.protein),
+    somaticCellCountPerMl: v.scc.length ? Math.round(avg(v.scc) * 1000) : null,
+    bactoscanCountPerMl: v.ibc.length ? Math.round(avg(v.ibc) * 1000) : null,
+  }));
+}
+
+async function cheeseLitresByDate(farmId, dates) {
+  const sales = await prisma.milkSaleEntry.findMany({
+    where: { farmId, date: { in: dates.map((d) => new Date(d)) }, takenBy: { contains: "cheese", mode: "insensitive" } },
+  });
+  const byDate = new Map();
+  for (const s of sales) {
+    const d = s.date.toISOString().slice(0, 10);
+    byDate.set(d, (byDate.get(d) ?? 0) + s.litres);
+  }
+  return byDate;
+}
+
+async function importCheeseFile(filePath, fileName) {
+  const workbook = XLSX.readFile(filePath);
+  const rows = parseCheeseSheet(workbook, fileName);
+  if (!rows.length) { console.log(`\n${fileName}: no usable Burnview rows`); return; }
+
+  const farm = await prisma.farm.findUnique({ where: { slug: "burnview" } });
+  if (!farm) { console.warn(`  ! No Burnview farm found — skipping ${fileName}`); return; }
+
+  const litresByDate = await cheeseLitresByDate(farm.id, rows.map((r) => r.date));
+
+  let written = 0;
+  for (const r of rows) {
+    const litres = litresByDate.get(r.date) ?? null;
+    const data = {
+      ...(r.butterfatPct != null && { butterfatPct: r.butterfatPct }),
+      ...(r.proteinPct != null && { proteinPct: r.proteinPct }),
+      ...(r.somaticCellCountPerMl != null && { somaticCellCountPerMl: r.somaticCellCountPerMl }),
+      ...(r.bactoscanCountPerMl != null && { bactoscanCountPerMl: r.bactoscanCountPerMl }),
+      ...(litres != null && { litres }),
+      sourceFile: fileName,
+    };
+    await prisma.milkQualityEntry.upsert({
+      where: { tankNumber_date: { tankNumber: CHEESE_TANK_NUMBER, date: new Date(r.date) } },
+      update: data,
+      create: { farmId: farm.id, tankNumber: CHEESE_TANK_NUMBER, date: new Date(r.date), ...data },
+    });
+    written++;
+  }
+  console.log(`\n${fileName}: upserted ${written} date(s) for Burnview's cheese-factory line (tank ${CHEESE_TANK_NUMBER}).`);
+}
+
 const prisma = new PrismaClient();
 
 async function importFile(filePath, fileName) {
@@ -246,16 +372,24 @@ async function importFile(filePath, fileName) {
 async function main() {
   const state = loadState();
   const processed = new Set(state.processed ?? []);
-  const files = readdirSync(EXPORT_DIR).filter((f) => f.toLowerCase().endsWith(".pdf")).sort();
-  const newFiles = files.filter((f) => !processed.has(f));
-  if (!newFiles.length) { console.log("No new Clover quality cards."); return; }
+  const allEntries = readdirSync(EXPORT_DIR);
+  const pdfFiles = allEntries.filter((f) => f.toLowerCase().endsWith(".pdf")).sort();
+  const xlsxFiles = allEntries.filter((f) => f.toLowerCase().endsWith(".xlsx")).sort();
+  const newPdfs = pdfFiles.filter((f) => !processed.has(f));
 
-  for (const fileName of newFiles) {
+  if (!newPdfs.length && !xlsxFiles.length) { console.log("No new Clover quality cards or cheese-factory exports."); return; }
+
+  for (const fileName of newPdfs) {
     await importFile(join(EXPORT_DIR, fileName), fileName);
     processed.add(fileName);
     state.processed = [...processed];
     saveState(state);
   }
+
+  for (const fileName of xlsxFiles) {
+    await importCheeseFile(join(EXPORT_DIR, fileName), fileName);
+  }
+
   console.log("\nDone.");
 }
 
