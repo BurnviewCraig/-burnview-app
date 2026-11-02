@@ -333,6 +333,7 @@ model MilkQualityEntry {
   somaticCellCountPerMl Int?
   munMgPer100ml         Float?
   alizarolPct           Float?
+  litres                Float? // that tank's collection volume for the day, from the card's "Milk Delivery (litre)" table
 
   sourceFile String? // which weekly PDF last wrote this row, for tracing back a correction
   createdAt  DateTime @default(now())

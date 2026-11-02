@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Utensils, ChevronRight, Milk, FlaskConical } from "lucide-react";
 import { Header } from "@/components/Header";
@@ -8,7 +8,8 @@ import { Spinner } from "@/components/Spinner";
 import { AccessGate } from "@/components/AccessGate";
 import { TrendChart, type ChartRange } from "@/components/TrendChart";
 import { useApi } from "@/lib/useApi";
-import type { Farm, CattleGroup, CattleSummary } from "@/lib/types";
+import { FARM_TANKS, aggregateFarmQuality, latestQualityValue } from "@/lib/milkQuality";
+import type { Farm, CattleGroup, CattleSummary, MilkQualityEntry } from "@/lib/types";
 
 const ALL_FARMS_ID = "__all__";
 
@@ -21,13 +22,20 @@ const METRICS = [
 ] as const;
 type MetricId = (typeof METRICS)[number]["id"];
 
-function SummaryPanel({ farmId, label }: { farmId: string | null; label: string }) {
+function SummaryPanel({ farmId, label, slug }: { farmId: string | null; label: string; slug: string | null }) {
   const { data } = useApi<CattleSummary>(
     farmId === ALL_FARMS_ID ? "/api/cattle-summary" : `/api/cattle-summary?farmId=${farmId}`
   );
   const current = data?.current;
   const [metric, setMetric] = useState<MetricId>("litres");
   const [range, setRange] = useState<ChartRange>("1m");
+
+  const { data: qualityData } = useApi<{ entries: MilkQualityEntry[] }>("/api/milk-quality");
+  const qualityEntries = qualityData?.entries ?? [];
+  const qualityTanks = slug ? FARM_TANKS[slug] ?? [] : Object.values(FARM_TANKS).flat();
+  const qualityRows = useMemo(() => aggregateFarmQuality(qualityEntries, qualityTanks), [qualityEntries, qualityTanks]);
+  const latestButterfat = latestQualityValue(qualityRows, "butterfatPct");
+  const latestProtein = latestQualityValue(qualityRows, "proteinPct");
 
   const trendKey =
     metric === "dairyMeal" ? "dairyMeal" :
@@ -47,6 +55,8 @@ function SummaryPanel({ farmId, label }: { farmId: string | null; label: string 
         <div><span className="wib-k">Dairy meal</span><span className="wib-v">{current?.dairyMealKg ?? "—"}{current?.dairyMealKg != null ? "kg" : ""}</span></div>
         <div><span className="wib-k">g / litre</span><span className="wib-v">{current?.gramsPerLitre ?? "—"}</span></div>
         <div><span className="wib-k">Days in milk</span><span className="wib-v">{current?.avgDaysInMilk ?? "—"}</span></div>
+        <div><span className="wib-k">Butterfat</span><span className="wib-v">{latestButterfat ? `${Math.round(latestButterfat.value * 100) / 100}%` : "—"}</span></div>
+        <div><span className="wib-k">Protein</span><span className="wib-v">{latestProtein ? `${Math.round(latestProtein.value * 100) / 100}%` : "—"}</span></div>
       </div>
 
       <div className="chip-wrap" style={{ marginBottom: 8 }}>
@@ -122,10 +132,10 @@ function CattlePageInner() {
       </div>
 
       {showingAll ? (
-        <SummaryPanel farmId={ALL_FARMS_ID} label="Business" />
+        <SummaryPanel farmId={ALL_FARMS_ID} label="Business" slug={null} />
       ) : (
         <>
-          {farm && <SummaryPanel farmId={farm.id} label={farm.name} />}
+          {farm && <SummaryPanel farmId={farm.id} label={farm.name} slug={farm.slug} />}
           {groups.length === 0 ? (
             <p className="ds-note" style={{ padding: "12px 18px" }}>No milking groups set up for {farm?.name}.</p>
           ) : (

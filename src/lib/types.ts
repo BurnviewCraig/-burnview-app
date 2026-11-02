@@ -150,6 +150,7 @@ export type MilkQualityEntry = {
   somaticCellCountPerMl: number | null;
   munMgPer100ml: number | null;
   alizarolPct: number | null;
+  litres: number | null;
 };
 
 export type StockItem = {

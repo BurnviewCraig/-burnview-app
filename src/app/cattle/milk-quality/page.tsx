@@ -6,6 +6,7 @@ import { Spinner } from "@/components/Spinner";
 import { AccessGate } from "@/components/AccessGate";
 import { TrendChart, type ChartRange } from "@/components/TrendChart";
 import { useApi } from "@/lib/useApi";
+import { FARM_TANKS, aggregateFarmQuality, latestQualityValue, type QualityMetricField } from "@/lib/milkQuality";
 import type { Farm, MilkQualityEntry } from "@/lib/types";
 
 const ALL_FARMS_ID = "__all__";
@@ -19,17 +20,6 @@ const METRICS = [
   { id: "somaticCellCountPerMl", label: "Somatic cell", unit: " /ml" },
 ] as const;
 type MetricId = (typeof METRICS)[number]["id"];
-
-// Clover's own tank numbers, global across the business — not per-farm.
-const TANK_FARM_SLUG: Record<number, string> = { 1: "burnview", 2: "burnview", 3: "everfair", 4: "stockton" };
-
-function latestFor(entries: MilkQualityEntry[], field: MetricId) {
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const v = entries[i][field];
-    if (v != null) return { value: v, date: entries[i].date };
-  }
-  return null;
-}
 
 function fmtDate(date: string) {
   return new Date(date.slice(0, 10) + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" });
@@ -53,20 +43,19 @@ function MilkQualityPageInner() {
   const [metric, setMetric] = useState<MetricId>("butterfatPct");
   const [range, setRange] = useState<ChartRange>("1m");
 
-  const byTank = useMemo(() => {
-    const map = new Map<number, MilkQualityEntry[]>();
-    entries.forEach((e) => map.set(e.tankNumber, [...(map.get(e.tankNumber) ?? []), e]));
+  const farmTabs = farms.filter((f) => FARM_TANKS[f.slug]);
+
+  const shownFarms = useMemo(
+    () => farmTabs.filter((f) => farmFilter === ALL_FARMS_ID || farmFilter === f.id),
+    [farmTabs, farmFilter]
+  );
+
+  const qualityByFarm = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof aggregateFarmQuality>>();
+    for (const f of farmTabs) map.set(f.slug, aggregateFarmQuality(entries, FARM_TANKS[f.slug]));
     return map;
-  }, [entries]);
+  }, [entries, farmTabs]);
 
-  const tanks = useMemo(() => {
-    return Object.keys(TANK_FARM_SLUG)
-      .map(Number)
-      .filter((n) => farmFilter === ALL_FARMS_ID || farms.find((f) => f.id === farmFilter)?.slug === TANK_FARM_SLUG[n])
-      .sort((a, b) => a - b);
-  }, [farms, farmFilter]);
-
-  const farmTabs = farms.filter((f) => Object.values(TANK_FARM_SLUG).includes(f.slug));
   const activeMetric = METRICS.find((m) => m.id === metric)!;
 
   if (farmsLoading || loading) return <div className="screen"><Header title="Milk quality" backHref="/cattle" /><Spinner /></div>;
@@ -75,7 +64,7 @@ function MilkQualityPageInner() {
     <div className="screen">
       <Header title="Milk quality" backHref="/cattle" />
       <p className="ds-note" style={{ padding: "12px 18px 0" }}>
-        From Clover&apos;s weekly quality card — butterfat, protein, MUN, bactoscan and more, per bulk tank.
+        From Clover&apos;s weekly quality card — butterfat, protein, MUN, bactoscan and more. Burnview&apos;s two tanks are combined, weighted by each tank&apos;s litres.
       </p>
 
       <div className="tabs">
@@ -92,31 +81,30 @@ function MilkQualityPageInner() {
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        {tanks.length === 0 && <p className="ds-note" style={{ padding: "12px 18px" }}>No quality card data yet.</p>}
-        {tanks.map((tankNumber) => {
-          const tankEntries = byTank.get(tankNumber) ?? [];
-          const farm = farms.find((f) => f.slug === TANK_FARM_SLUG[tankNumber]);
-          const points = tankEntries
-            .filter((e) => e[metric] != null)
-            .map((e) => ({ date: e.date.slice(0, 10), value: e[metric] as number }));
+        {shownFarms.length === 0 && <p className="ds-note" style={{ padding: "12px 18px" }}>No quality card data yet.</p>}
+        {shownFarms.map((f) => {
+          const rows = qualityByFarm.get(f.slug) ?? [];
+          const points = rows
+            .filter((r) => r[metric as QualityMetricField] != null)
+            .map((r) => ({ date: r.date, value: r[metric as QualityMetricField] as number }));
 
           return (
-            <div key={tankNumber} style={{ padding: "6px 18px 14px" }}>
+            <div key={f.id} style={{ padding: "6px 18px 14px" }}>
               <div className="pivot-card">
                 <div className="pivot-card-head">
-                  <span className="pivot-card-name">Tank {tankNumber} — {farm?.name ?? ""}</span>
+                  <span className="pivot-card-name">{f.name}</span>
                 </div>
-                {tankEntries.length === 0 ? (
+                {rows.length === 0 ? (
                   <div className="pivot-run-row empty"><span>No readings yet</span></div>
                 ) : (
                   <div className="wedge-info-box" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", width: "100%", marginBottom: 8 }}>
                     {METRICS.slice(0, 4).map((m) => {
-                      const latest = latestFor(tankEntries, m.id);
+                      const latest = latestQualityValue(rows, m.id as QualityMetricField);
                       return (
                         <div key={m.id}>
                           <span className="wib-k">{m.label}</span>
                           <span className="wib-v">
-                            {latest ? `${latest.value}${m.unit}` : "—"}
+                            {latest ? `${Math.round(latest.value * 100) / 100}${m.unit}` : "—"}
                             {latest && <span style={{ opacity: 0.6, fontWeight: 400 }}> ({fmtDate(latest.date)})</span>}
                           </span>
                         </div>

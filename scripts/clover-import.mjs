@@ -1,8 +1,9 @@
 // Weekly Clover quality-card import — reads the PDF "quality cards" Clover
 // emails every week (one drops it into Desktop\Clover Quality Cards by
 // hand — there's no automated export feeding this one) and writes
-// butterfat/protein/lactose/bactoscan/somatic cell/MUN/alizarol readings
-// into the app's DB, one row per bulk tank per sample date.
+// butterfat/protein/lactose/bactoscan/somatic cell/MUN/alizarol readings,
+// plus each tank's daily collection volume (litres), into the app's DB,
+// one row per bulk tank per date.
 //
 // Run with: node --env-file=.env scripts/clover-import.mjs
 //
@@ -88,11 +89,12 @@ function parsePage(items, fileName, pageNum) {
   const periodItem = items.find((i) => /^Period:/.test(i.str));
   const periodMatch = periodItem?.str.match(/Period:\s*(\d{2})-(\w{3})-(\d{4})\s*TO\s*(\d{2})-(\w{3})-(\d{4})/);
   if (!periodMatch) { console.warn(`  ! ${tag}: couldn't find the report period — skipping`); return null; }
-  const [, , startMonAbbr, startYearStr, , endMonAbbr, endYearStr] = periodMatch;
+  const [, , startMonAbbr, startYearStr, endDayStr, endMonAbbr, endYearStr] = periodMatch;
   const startMonth = MONTHS[startMonAbbr];
   const endMonth = MONTHS[endMonAbbr];
   const startYear = Number(startYearStr);
   const endYear = Number(endYearStr);
+  const endDay = Number(endDayStr);
 
   // "Tests Used in Calculations" section: its header row (the 7 metric
   // names) sits a bit below the section title, and the Date/value
@@ -149,7 +151,52 @@ function parsePage(items, fileName, pageNum) {
     fields[c.field] = entries;
   });
 
+  fields.litres = parseLitreTable(items, startMonth, startYear, endDay, tag);
+
   return { tankNumber, farmSlug, fields };
+}
+
+// The "Milk Delivery (litre)" table at the top of the page: one row per day
+// of the month, in two side-by-side blocks (days 1-16, days 17-31), each
+// row printing Day/Temp/Litre. When a day had no collection, Clover prints
+// only Day + "0.0" (that "0.0" sits at the Temp column's x, not Litre's) and
+// omits the litre figure entirely — so a 2-item row means litres = 0, and a
+// 3-item row's 3rd item is the actual litre reading.
+function parseLitreTable(items, startMonth, startYear, endDay, tag) {
+  const headerDayItems = items.filter((i) => i.str === "Day");
+  if (headerDayItems.length < 2) {
+    console.warn(`  ! ${tag}: couldn't find the Milk Delivery (litre) table — skipping litres`);
+    return [];
+  }
+  const headerY = headerDayItems[0].y;
+  const rows = items.filter((i) => i.x < 250 && i.y < headerY - 2 && i.y > headerY - 260);
+  const byY = new Map();
+  for (const it of rows) {
+    const key = it.y.toFixed(1);
+    byY.set(key, [...(byY.get(key) ?? []), it]);
+  }
+
+  const byDay = new Map();
+  for (const group of byY.values()) {
+    const left = group.filter((i) => i.x < 130).sort((a, b) => a.x - b.x);
+    const right = group.filter((i) => i.x >= 130).sort((a, b) => a.x - b.x);
+    for (const side of [left, right]) {
+      if (side.length === 0 || !/^\d{1,2}$/.test(side[0].str)) continue;
+      const day = Number(side[0].str);
+      if (day < 1 || day > 31) continue;
+      const litres = side.length >= 3 ? parseFloatOrNull(side[2].str.replace(/\s/g, "")) ?? 0 : 0;
+      byDay.set(day, litres);
+    }
+  }
+
+  const entries = [];
+  for (let day = 1; day <= Math.min(31, endDay); day++) {
+    if (!byDay.has(day)) continue;
+    const dd = String(day).padStart(2, "0");
+    const mm = String(startMonth + 1).padStart(2, "0");
+    entries.push({ date: `${startYear}-${mm}-${dd}`, value: byDay.get(day) });
+  }
+  return entries;
 }
 
 const prisma = new PrismaClient();
