@@ -138,6 +138,20 @@ export type WaterMeterReading = {
   notes: string | null;
 };
 
+export type MilkQualityEntry = {
+  id: string;
+  farmId: string;
+  tankNumber: number;
+  date: string;
+  butterfatPct: number | null;
+  proteinPct: number | null;
+  lactosePct: number | null;
+  bactoscanCountPerMl: number | null;
+  somaticCellCountPerMl: number | null;
+  munMgPer100ml: number | null;
+  alizarolPct: number | null;
+};
+
 export type StockItem = {
   id: string;
   kind: "FEED" | "LAND_INPUT" | "DAIRY";

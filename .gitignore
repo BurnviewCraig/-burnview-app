@@ -10,3 +10,4 @@ next-env.d.ts
 .claude
 tsconfig.tsbuildinfo
 scripts/afi-import-state.json
+scripts/clover-import-state.json

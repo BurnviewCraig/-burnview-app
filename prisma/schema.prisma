@@ -63,6 +63,7 @@ model Farm {
   diaryEntries    DiaryEntry[]
   pivots          Pivot[]
   waterMeters     WaterMeter[]
+  milkQualityEntries MilkQualityEntry[]
 }
 
 model Paddock {
@@ -310,6 +311,36 @@ model MilkSaleEntry {
   farm      Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
   createdBy User? @relation(fields: [createdById], references: [id])
 
+  @@index([farmId, date])
+}
+
+// Weekly "quality card" from Clover (the creamery) — one row per bulk tank
+// per sample date. Tank numbers are Clover's own, global across the whole
+// business (1 & 2 = Burnview's two tanks, 3 = Everfair, 4 = Stockton), not
+// per-farm. Each metric is upserted independently since Clover doesn't
+// sample every metric on the same day, so most rows only have some fields
+// filled in — a later card filling in the rest doesn't touch what's there.
+model MilkQualityEntry {
+  id         String   @id @default(cuid())
+  farmId     String
+  tankNumber Int
+  date       DateTime @db.Date
+
+  butterfatPct          Float?
+  proteinPct            Float?
+  lactosePct            Float?
+  bactoscanCountPerMl   Int?
+  somaticCellCountPerMl Int?
+  munMgPer100ml         Float?
+  alizarolPct           Float?
+
+  sourceFile String? // which weekly PDF last wrote this row, for tracing back a correction
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@unique([tankNumber, date])
   @@index([farmId, date])
 }
 

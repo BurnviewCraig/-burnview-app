@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Utensils, ChevronRight, Milk } from "lucide-react";
+import { Utensils, ChevronRight, Milk, FlaskConical } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { AccessGate } from "@/components/AccessGate";
@@ -101,6 +101,14 @@ function CattlePageInner() {
           <div className="menu-row-text">
             <span className="mr-title">Milk sold</span>
             <span className="mr-sub">Litres sold per day, and who took it</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+        <Link className="menu-row" href="/cattle/milk-quality">
+          <FlaskConical size={18} strokeWidth={1.75} />
+          <div className="menu-row-text">
+            <span className="mr-title">Milk quality</span>
+            <span className="mr-sub">Butterfat, protein, MUN &amp; bactoscan from Clover&apos;s quality card</span>
           </div>
           <ChevronRight size={16} />
         </Link>
