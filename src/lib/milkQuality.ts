@@ -67,6 +67,34 @@ export function aggregateFarmQuality(entries: MilkQualityEntry[], tanks: number[
   return rows.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// Energy Corrected Milk — standardizes raw litres to a common 3.5%
+// fat / 3.2% protein basis (Tyrrell & Reid), so yield is comparable across
+// farms (or cows) even when their milk tests differently. Treats 1 litre
+// as 1 kg, the usual approximation in farm-level reporting.
+export function ecmPerLitre(fatPct: number, proteinPct: number) {
+  return 0.327 + 0.116 * fatPct + 0.06 * proteinPct;
+}
+
+// Combines a litres trend (e.g. litres/cow) with quality readings into an
+// ECM trend, forward-filling the latest known butterfat/protein onto each
+// litres date since Clover doesn't sample every day.
+export function ecmTrend(litresTrend: { date: string; value: number }[], qualityRows: FarmQualityRow[]) {
+  let fat: number | null = null;
+  let protein: number | null = null;
+  let qi = 0;
+  const result: { date: string; value: number }[] = [];
+  for (const point of litresTrend) {
+    while (qi < qualityRows.length && qualityRows[qi].date <= point.date) {
+      if (qualityRows[qi].butterfatPct != null) fat = qualityRows[qi].butterfatPct;
+      if (qualityRows[qi].proteinPct != null) protein = qualityRows[qi].proteinPct;
+      qi++;
+    }
+    if (fat == null || protein == null) continue;
+    result.push({ date: point.date, value: Math.round(point.value * ecmPerLitre(fat, protein) * 100) / 100 });
+  }
+  return result;
+}
+
 export function latestQualityValue(rows: FarmQualityRow[], field: QualityMetricField) {
   for (let i = rows.length - 1; i >= 0; i--) {
     const v = rows[i][field];

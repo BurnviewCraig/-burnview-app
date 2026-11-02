@@ -8,13 +8,14 @@ import { Spinner } from "@/components/Spinner";
 import { AccessGate } from "@/components/AccessGate";
 import { TrendChart, type ChartRange } from "@/components/TrendChart";
 import { useApi } from "@/lib/useApi";
-import { FARM_TANKS, aggregateFarmQuality, latestQualityValue } from "@/lib/milkQuality";
+import { FARM_TANKS, aggregateFarmQuality, ecmPerLitre, ecmTrend, latestQualityValue } from "@/lib/milkQuality";
 import type { Farm, CattleGroup, CattleSummary, MilkQualityEntry } from "@/lib/types";
 
 const ALL_FARMS_ID = "__all__";
 
 const METRICS = [
   { id: "litres", label: "Litres/cow", unit: " L/cow" },
+  { id: "ecm", label: "ECM/cow", unit: " kg/cow" },
   { id: "weight", label: "Weight", unit: "kg" },
   { id: "dairyMeal", label: "Dairy meal", unit: "kg" },
   { id: "gramsPerLitre", label: "g/L", unit: "g/L" },
@@ -36,13 +37,20 @@ function SummaryPanel({ farmId, label, slug }: { farmId: string | null; label: s
   const qualityRows = useMemo(() => aggregateFarmQuality(qualityEntries, qualityTanks), [qualityEntries, qualityTanks]);
   const latestButterfat = latestQualityValue(qualityRows, "butterfatPct");
   const latestProtein = latestQualityValue(qualityRows, "proteinPct");
+  const currentEcm =
+    current?.litresPerCow != null && latestButterfat && latestProtein
+      ? Math.round(current.litresPerCow * ecmPerLitre(latestButterfat.value, latestProtein.value) * 10) / 10
+      : null;
+
+  const litresTrend = data?.trend.litres ?? [];
+  const ecmPoints = useMemo(() => ecmTrend(litresTrend, qualityRows), [litresTrend, qualityRows]);
 
   const trendKey =
     metric === "dairyMeal" ? "dairyMeal" :
     metric === "gramsPerLitre" ? "gramsPerLitre" :
     metric === "weight" ? "weight" :
     metric === "daysInMilk" ? "daysInMilk" : "litres";
-  const points = data?.trend[trendKey] ?? [];
+  const points = metric === "ecm" ? ecmPoints : data?.trend[trendKey] ?? [];
   const activeMetric = METRICS.find((m) => m.id === metric)!;
 
   return (
@@ -51,6 +59,7 @@ function SummaryPanel({ farmId, label, slug }: { farmId: string | null; label: s
       <div className="wedge-info-box" style={{ display: "grid", width: "100%" }}>
         <div><span className="wib-k">Head</span><span className="wib-v">{current?.count ?? "—"}</span></div>
         <div><span className="wib-k">Litres/cow</span><span className="wib-v">{current?.litresPerCow ?? "—"}</span></div>
+        <div><span className="wib-k">ECM/cow</span><span className="wib-v">{currentEcm ?? "—"}{currentEcm != null ? "kg" : ""}</span></div>
         <div><span className="wib-k">Weight</span><span className="wib-v">{current?.avgWeightKg ?? "—"}{current?.avgWeightKg != null ? "kg" : ""}</span></div>
         <div><span className="wib-k">Dairy meal</span><span className="wib-v">{current?.dairyMealKg ?? "—"}{current?.dairyMealKg != null ? "kg" : ""}</span></div>
         <div><span className="wib-k">g / litre</span><span className="wib-v">{current?.gramsPerLitre ?? "—"}</span></div>
