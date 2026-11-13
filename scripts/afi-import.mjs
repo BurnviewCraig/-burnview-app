@@ -53,13 +53,16 @@ const SOURCES = [
     name: "Burnview/Everfair",
     exportDir: process.env.AFI_EXPORT_DIR || "C:\\Users\\craig\\OneDrive\\Report Export",
     // AFI group number -> which farm + which CattleGroup.name it is. 70/71
-    // are the Burnview/Everfair hospital pens — deliberately not one of the
-    // four tracked groups, so they're just left out.
+    // are the Burnview/Everfair hospital pens — tracked as their own group
+    // per farm so sick/fresh cows' milk counts toward the farm average
+    // instead of being silently dropped.
     groupMap: {
       1: { farmSlug: "burnview", groupName: "A" },
       2: { farmSlug: "burnview", groupName: "B" },
       3: { farmSlug: "burnview", groupName: "C" },
       4: { farmSlug: "everfair", groupName: "EA" },
+      70: { farmSlug: "burnview", groupName: "Hospital" },
+      71: { farmSlug: "everfair", groupName: "Hospital" },
     },
     tankFarm: { 1: "burnview", 2: "everfair" },
     // No prefix — matches the sourceRef format already used for every
@@ -71,10 +74,11 @@ const SOURCES = [
     key: "stockton",
     name: "Stockton",
     exportDir: process.env.AFI_STOCKTON_EXPORT_DIR || "C:\\Users\\craig\\OneDrive\\Report Exports",
-    // Group 70 is Stockton's hospital pen, left out same as Burnview's.
+    // Group 70 is Stockton's hospital pen, tracked the same as Burnview's.
     groupMap: {
       1: { farmSlug: "stockton", groupName: "SA" },
       2: { farmSlug: "stockton", groupName: "SB" },
+      70: { farmSlug: "stockton", groupName: "Hospital" },
     },
     tankFarm: { 1: "stockton" },
     // Prefixed so an invoice number from this separate AFI system can never
