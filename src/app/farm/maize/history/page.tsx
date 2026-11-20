@@ -255,7 +255,7 @@ function FieldDetailSheet({
   );
 }
 
-type FieldRow = { id: string; code: string; maizeSortOrder: number | null; seasons: MaizeFieldSeason[] };
+type FieldRow = { id: string; code: string; maizeSortOrder: number | null; seasons: MaizeFieldSeason[]; memberIds?: string[] };
 
 // A pivot/section (see FARM_SECTIONS) where every one of its camps has the
 // exact same season record — same variety, dates, population etc. Detected
@@ -314,11 +314,14 @@ export default function MaizeHistoryPage() {
   const { data: seasonsData, refetch: refetchSeasons } = useApi<{ entries: MaizeFieldSeason[] }>(farm ? `/api/maize-field-seasons?farmId=${farm.id}` : null);
   const refetch = () => { refetchSeasons(); refetchFarms(); };
 
-  // A field belongs here if it's currently classified Maize, or has any
-  // season history at all (so a field rotated out of maize doesn't lose
-  // its past records from view) — every season shows as its own row, not
-  // just the latest. Order is shared (Paddock.maizeSortOrder), not per
-  // browser, since everyone should see fields laid out the same way.
+  // A field belongs here if it has any season history at all — classifying
+  // a field Maize doesn't by itself put it in this list, only an actual
+  // logged season does (so an unplanted field, e.g. V2, doesn't show up
+  // with a row of dashes). A field rotated out of maize still keeps its
+  // past records visible. Every season shows as its own row, not just the
+  // latest. Order is shared (Paddock.maizeSortOrder), not per browser,
+  // since everyone should see fields laid out the same way.
+  const sizeHaByPaddockId = useMemo(() => new Map((farm?.paddocks ?? []).map((p) => [p.id, p.sizeHa])), [farm]);
   const fields = useMemo<FieldRow[]>(() => {
     if (!farm) return [];
     const byId = new Map<string, FieldRow>();
@@ -328,7 +331,7 @@ export default function MaizeHistoryPage() {
       if (existing) existing.seasons.push(s);
       else byId.set(s.paddockId, { id: s.paddockId, code: s.paddockCode ?? s.paddockId, maizeSortOrder: null, seasons: [s] });
     });
-    const defaultOrder = [...byId.values()].sort((a, b) => {
+    const defaultOrder = [...byId.values()].filter((f) => f.seasons.length > 0).sort((a, b) => {
       if (a.maizeSortOrder != null && b.maizeSortOrder != null) return a.maizeSortOrder - b.maizeSortOrder;
       if (a.maizeSortOrder != null) return -1;
       if (b.maizeSortOrder != null) return 1;
@@ -384,6 +387,7 @@ export default function MaizeHistoryPage() {
         code: name,
         maizeSortOrder: null,
         seasons: [...matches].sort((a, b) => (a.season < b.season ? 1 : -1)).map((m) => m.representative),
+        memberIds: [...new Set(matches.flatMap((m) => m.fieldIds))],
       } as FieldRow,
       index: Math.min(...matches.flatMap((m) => m.fieldIds.map((id) => indexOf.get(id) ?? Infinity))),
     }));
@@ -394,6 +398,17 @@ export default function MaizeHistoryPage() {
 
     return [...remaining, ...groupRows].sort((a, b) => a.index - b.index).map((r) => r.row);
   }, [fields, activeMatches]);
+
+  // Hectares planted = sum of each distinct field's size, counted once even
+  // when a combined section row stands in for several camps.
+  const totalHa = useMemo(() => {
+    let sum = 0;
+    for (const field of displayFields) {
+      const ids = field.memberIds ?? [field.id];
+      for (const id of ids) sum += sizeHaByPaddockId.get(id) ?? 0;
+    }
+    return sum;
+  }, [displayFields, sizeHaByPaddockId]);
 
   if (loading) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><Spinner /></div>;
   if (!farm) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><div className="empty">No farms found.</div></div>;
@@ -494,6 +509,12 @@ export default function MaizeHistoryPage() {
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr>
+                  <td className="maize-sheet-sticky"><strong>Total planted</strong></td>
+                  <td colSpan={order.length}>{totalHa ? `${totalHa.toLocaleString()} ha` : "—"}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </>

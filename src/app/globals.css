@@ -408,6 +408,8 @@ a:visited { color: var(--ink); }
 .maize-sheet-sticky { position: sticky; left: 0; background: var(--card); }
 .maize-sheet-table tbody tr:hover .maize-sheet-sticky { background: var(--paper); }
 .maize-sheet-table th.maize-sheet-sticky { background: var(--paper); z-index: 1; }
+.maize-sheet-table tfoot td { background: var(--paper); font-weight: 600; }
+.maize-sheet-table tfoot .maize-sheet-sticky { background: var(--paper); }
 
 .settings-row { display:flex; flex-direction:column; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--paper-deep); }
 .settings-row.active { background: var(--card); }
