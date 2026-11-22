@@ -307,8 +307,6 @@ export default function MaizeHistoryPage() {
   const farm = farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0];
   const [selected, setSelected] = useState<{ id: string; code: string; seasonId: string | null } | null>(null);
   const [dragKey, setDragKey] = useState<ColumnKey | null>(null);
-  const [dragFieldId, setDragFieldId] = useState<string | null>(null);
-  const [orderOverride, setOrderOverride] = useState<string[] | null>(null);
   const { order, reorder } = useColumnOrder();
 
   const { data: seasonsData, refetch: refetchSeasons } = useApi<{ entries: MaizeFieldSeason[] }>(farm ? `/api/maize-field-seasons?farmId=${farm.id}` : null);
@@ -319,8 +317,11 @@ export default function MaizeHistoryPage() {
   // logged season does (so an unplanted field, e.g. V2, doesn't show up
   // with a row of dashes). A field rotated out of maize still keeps its
   // past records visible. Every season shows as its own row, not just the
-  // latest. Order is shared (Paddock.maizeSortOrder), not per browser,
-  // since everyone should see fields laid out the same way.
+  // latest. Fields are ordered by their most recent season's plant date
+  // (earliest first) so the sheet reads as a planting timeline, making it
+  // easy to spot a field whose spray/top-dressing dates are out of step
+  // with neighbours planted around the same time. Fields with no plant
+  // date yet sort to the end.
   const sizeHaByPaddockId = useMemo(() => new Map((farm?.paddocks ?? []).map((p) => [p.id, p.sizeHa])), [farm]);
   const fields = useMemo<FieldRow[]>(() => {
     if (!farm) return [];
@@ -331,33 +332,23 @@ export default function MaizeHistoryPage() {
       if (existing) existing.seasons.push(s);
       else byId.set(s.paddockId, { id: s.paddockId, code: s.paddockCode ?? s.paddockId, maizeSortOrder: null, seasons: [s] });
     });
-    const defaultOrder = [...byId.values()].filter((f) => f.seasons.length > 0).sort((a, b) => {
-      if (a.maizeSortOrder != null && b.maizeSortOrder != null) return a.maizeSortOrder - b.maizeSortOrder;
-      if (a.maizeSortOrder != null) return -1;
-      if (b.maizeSortOrder != null) return 1;
+    const latestPlantDate = (f: FieldRow): string | null => {
+      let best: MaizeFieldSeason | null = null;
+      for (const s of f.seasons) {
+        if (!best || s.season > best.season) best = s;
+        else if (s.season === best.season && (s.plantDate ?? "") > (best.plantDate ?? "")) best = s;
+      }
+      return best?.plantDate ?? null;
+    };
+    return [...byId.values()].filter((f) => f.seasons.length > 0).sort((a, b) => {
+      const da = latestPlantDate(a);
+      const db = latestPlantDate(b);
+      if (da && db) return da === db ? a.code.localeCompare(b.code, undefined, { numeric: true }) : da < db ? -1 : 1;
+      if (da) return -1;
+      if (db) return 1;
       return a.code.localeCompare(b.code, undefined, { numeric: true });
     });
-    if (orderOverride) {
-      const byFieldId = new Map(defaultOrder.map((f) => [f.id, f]));
-      const ordered = orderOverride.map((id) => byFieldId.get(id)).filter((f): f is FieldRow => !!f);
-      const missing = defaultOrder.filter((f) => !orderOverride.includes(f.id));
-      return [...ordered, ...missing];
-    }
-    return defaultOrder;
-  }, [farm, seasonsData, orderOverride]);
-
-  const reorderFields = async (dragId: string, dropId: string) => {
-    if (dragId === dropId) return;
-    const currentIds = fields.map((f) => f.id);
-    const next = currentIds.filter((k) => k !== dragId);
-    const dropIndex = next.indexOf(dropId);
-    next.splice(dropIndex, 0, dragId);
-    setOrderOverride(next);
-    await Promise.all(next.map((id, i) => fetch(`/api/paddocks/${id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maizeSortOrder: i }),
-    })));
-    refetchFarms();
-  };
+  }, [farm, seasonsData]);
 
   // Which sections currently have a full, identical match are found fresh
   // from the data every render; "expanded" ones are ones the user chose to
@@ -418,7 +409,7 @@ export default function MaizeHistoryPage() {
       <Header title="Maize History" backHref="/farm/maize" />
       <div className="tabs">
         {farms.map((f) => (
-          <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => { setFarmId(f.id); setSelected(null); setOrderOverride(null); setExpandedSections(new Set()); }}>{f.name}</button>
+          <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => { setFarmId(f.id); setSelected(null); setExpandedSections(new Set()); }}>{f.name}</button>
         ))}
       </div>
 
@@ -427,7 +418,7 @@ export default function MaizeHistoryPage() {
       ) : (
         <>
           <p className="field-hint" style={{ padding: "10px 18px 0" }}>
-            Drag a column heading, or a field&apos;s name, to reorder it — field order is shared with everyone. Tap a row to see or edit that season.
+            Fields are ordered by planting date, earliest first — drag a column heading to reorder columns. Tap a row to see or edit that season.
           </p>
           {sectionMatches.length > 0 && (
             <div className="chip-wrap" style={{ padding: "0 18px 8px" }}>
@@ -476,15 +467,7 @@ export default function MaizeHistoryPage() {
                         onClick={() => (isGroup ? toggleSectionExpanded(field.code) : setSelected({ id: field.id, code: field.code, seasonId: s.id }))}
                       >
                         {i === 0 && (
-                          <td
-                            className={`maize-sheet-sticky${dragFieldId === field.id ? " dragging" : ""}`}
-                            rowSpan={rowSpan}
-                            draggable={!isGroup}
-                            onDragStart={(e) => { e.stopPropagation(); setDragFieldId(field.id); }}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => { e.stopPropagation(); if (dragFieldId) reorderFields(dragFieldId, field.id); setDragFieldId(null); }}
-                            onDragEnd={() => setDragFieldId(null)}
-                          >
+                          <td className="maize-sheet-sticky" rowSpan={rowSpan}>
                             <strong>{field.code}</strong>
                             {isGroup && <span className="ds-note" style={{ display: "block", fontWeight: 400 }}>all camps planted the same</span>}
                           </td>
@@ -494,16 +477,7 @@ export default function MaizeHistoryPage() {
                     ))
                   ) : (
                     <tr key={field.id} onClick={() => setSelected({ id: field.id, code: field.code, seasonId: null })}>
-                      <td
-                        className={`maize-sheet-sticky${dragFieldId === field.id ? " dragging" : ""}`}
-                        draggable
-                        onDragStart={(e) => { e.stopPropagation(); setDragFieldId(field.id); }}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => { e.stopPropagation(); if (dragFieldId) reorderFields(dragFieldId, field.id); setDragFieldId(null); }}
-                        onDragEnd={() => setDragFieldId(null)}
-                      >
-                        <strong>{field.code}</strong>
-                      </td>
+                      <td className="maize-sheet-sticky"><strong>{field.code}</strong></td>
                       {order.map((key) => <td key={key}>—</td>)}
                     </tr>
                   );
