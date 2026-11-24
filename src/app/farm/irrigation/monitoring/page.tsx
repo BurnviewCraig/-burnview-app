@@ -8,7 +8,7 @@ import { Spinner } from "@/components/Spinner";
 import { AccessGate } from "@/components/AccessGate";
 import { TankGauge } from "@/components/TankGauge";
 import { useApi } from "@/lib/useApi";
-import type { PumpSchedule, PumpTrigger, TelemetryDevice, TriggerComparison, PumpCommandAction } from "@/lib/types";
+import type { Pump, PumpSchedule, PumpTrigger, TelemetryDevice, TriggerComparison, PumpCommandAction } from "@/lib/types";
 
 const METRIC_SUGGESTIONS = ["level_pct", "pressure_bar"];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -80,11 +80,12 @@ export default function MonitoringPage() {
         )}
       </div>
 
-      {configuring?.pump && (
-        <PumpConfigSheet
+      {configuring && (
+        <DeviceConfigSheet
           device={configuring}
           allDevices={devices}
           onClose={() => setConfiguring(null)}
+          onChanged={refetch}
         />
       )}
     </AccessGate>
@@ -114,11 +115,9 @@ function DeviceCard({ device, onChanged, onConfigure }: { device: TelemetryDevic
       <div className="tm-card-head">
         <span className={`tm-status-dot${mostRecent ? (isLive ? " live" : " stale") : ""}`} />
         <span className="tm-card-name" title={device.name}>{device.name}</span>
-        {device.pump && (
-          <button className="link-btn" onClick={onConfigure} aria-label={`Configure ${device.pump.name}`}>
-            <Settings2 size={15} strokeWidth={1.75} />
-          </button>
-        )}
+        <button className="link-btn" onClick={onConfigure} aria-label={`Configure ${device.name}`}>
+          <Settings2 size={15} strokeWidth={1.75} />
+        </button>
       </div>
 
       <div className="tm-card-body">
@@ -156,11 +155,23 @@ function DeviceCard({ device, onChanged, onConfigure }: { device: TelemetryDevic
   );
 }
 
-function PumpConfigSheet({ device, allDevices, onClose }: { device: TelemetryDevice; allDevices: TelemetryDevice[]; onClose: () => void }) {
-  const pump = device.pump!;
-  const { data: triggersData, refetch: refetchTriggers } = useApi<{ triggers: PumpTrigger[] }>(`/api/pump-triggers?pumpId=${pump.id}`);
+// Opened via the gear icon on ANY device card, not just pumps — a tank
+// sensor has no pump of its own, but you still need to (a) calibrate its
+// reading and (b) set up triggers that watch IT and act on some pump
+// elsewhere on the farm (e.g. "tank hits 99% -> stop the gravity pump
+// feeding it"), which is why triggers/schedules here are scoped to the
+// whole farm rather than to this one device.
+function DeviceConfigSheet({
+  device, allDevices, onClose, onChanged,
+}: {
+  device: TelemetryDevice; allDevices: TelemetryDevice[]; onClose: () => void; onChanged: () => void;
+}) {
+  const farmDevices = allDevices.filter((d) => d.farmId === device.farmId);
+  const farmPumps = farmDevices.filter((d): d is TelemetryDevice & { pump: Pump } => !!d.pump).map((d) => d.pump);
+
+  const { data: triggersData, refetch: refetchTriggers } = useApi<{ triggers: PumpTrigger[] }>(`/api/pump-triggers?farmId=${device.farmId}`);
   const triggers = triggersData?.triggers ?? [];
-  const { data: schedulesData, refetch: refetchSchedules } = useApi<{ schedules: PumpSchedule[] }>(`/api/pump-schedules?pumpId=${pump.id}`);
+  const { data: schedulesData, refetch: refetchSchedules } = useApi<{ schedules: PumpSchedule[] }>(`/api/pump-schedules?farmId=${device.farmId}`);
   const schedules = schedulesData?.schedules ?? [];
 
   const [mounted, setMounted] = useState(false);
@@ -171,30 +182,88 @@ function PumpConfigSheet({ device, allDevices, onClose }: { device: TelemetryDev
     <div className="detail-sheet-overlay" onClick={onClose}>
       <div className="detail-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="ds-head">
-          <h2>{pump.name}</h2>
+          <h2>{device.name}</h2>
           <button className="close" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
 
-        <TriggerSection
-          pumpId={pump.id}
-          deviceOptions={allDevices.filter((d) => d.farmId === device.farmId)}
-          defaultDeviceId={device.id}
-          triggers={triggers}
-          refetch={refetchTriggers}
-        />
-        <ScheduleSection pumpId={pump.id} schedules={schedules} refetch={refetchSchedules} />
+        <CalibrationSection device={device} onChanged={onChanged} />
+
+        {farmPumps.length === 0 ? (
+          <p className="ds-note" style={{ marginTop: 14 }}>
+            No pump registered on this farm yet, so there&apos;s nothing to trigger or schedule — register one in
+            Settings → Telemetry devices first.
+          </p>
+        ) : (
+          <>
+            <TriggerSection
+              deviceOptions={farmDevices}
+              pumpOptions={farmPumps}
+              defaultDeviceId={device.id}
+              triggers={triggers}
+              refetch={refetchTriggers}
+            />
+            <ScheduleSection pumpOptions={farmPumps} schedules={schedules} refetch={refetchSchedules} />
+          </>
+        )}
       </div>
     </div>,
     document.body
   );
 }
 
+function CalibrationSection({ device, onChanged }: { device: TelemetryDevice; onChanged: () => void }) {
+  const [offset, setOffset] = useState(String(device.calibrationOffset));
+  const [scale, setScale] = useState(String(device.calibrationScale));
+  const [saving, setSaving] = useState(false);
+
+  const rawEntry = Object.values(device.latest ?? {})[0] ?? null;
+  // The device's `latest` value already has calibration applied, so back it
+  // out here to show the raw sensor figure alongside the live preview below.
+  const rawValue = rawEntry ? (rawEntry.value - device.calibrationOffset) / device.calibrationScale : null;
+  const previewValue = rawValue != null && offset !== "" && scale !== "" ? rawValue * Number(scale) + Number(offset) : null;
+
+  const save = async () => {
+    setSaving(true);
+    await fetch(`/api/telemetry-devices/${device.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calibrationOffset: Number(offset) || 0, calibrationScale: Number(scale) || 1 }),
+    });
+    setSaving(false);
+    onChanged();
+  };
+
+  return (
+    <div className="field" style={{ marginTop: 14 }}>
+      <span className="field-label">Sensor calibration</span>
+      <p className="ds-note">
+        Corrects a reading that&apos;s consistently off — e.g. the sensor reads 95% when the tank is actually full.
+        Shown value = raw × scale + offset. Doesn&apos;t touch past history, only how readings are read from here on.
+      </p>
+      {rawValue != null && (
+        <p className="ds-note">Raw sensor reading right now: {rawValue.toFixed(2)}{previewValue != null ? ` → shown as ${previewValue.toFixed(2)}` : ""}</p>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <label className="field" style={{ flex: 1 }}>
+          <span className="field-label">Offset</span>
+          <input className="field-input small" type="number" value={offset} onChange={(e) => setOffset(e.target.value)} />
+        </label>
+        <label className="field" style={{ flex: 1 }}>
+          <span className="field-label">Scale</span>
+          <input className="field-input small" type="number" value={scale} onChange={(e) => setScale(e.target.value)} />
+        </label>
+      </div>
+      <button className="save-btn small" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save calibration"}</button>
+    </div>
+  );
+}
+
 function TriggerSection({
-  pumpId, deviceOptions, defaultDeviceId, triggers, refetch,
+  deviceOptions, pumpOptions, defaultDeviceId, triggers, refetch,
 }: {
-  pumpId: string; deviceOptions: TelemetryDevice[]; defaultDeviceId: string; triggers: PumpTrigger[]; refetch: () => void;
+  deviceOptions: TelemetryDevice[]; pumpOptions: Pump[]; defaultDeviceId: string; triggers: PumpTrigger[]; refetch: () => void;
 }) {
   const [deviceId, setDeviceId] = useState(defaultDeviceId);
+  const [pumpId, setPumpId] = useState(pumpOptions[0]?.id ?? "");
   const [metric, setMetric] = useState("level_pct");
   const [comparison, setComparison] = useState<TriggerComparison>("BELOW");
   const [threshold, setThreshold] = useState("");
@@ -203,7 +272,7 @@ function TriggerSection({
   const [saving, setSaving] = useState(false);
 
   const add = async () => {
-    if (threshold === "") return;
+    if (threshold === "" || !pumpId) return;
     setSaving(true);
     await fetch("/api/pump-triggers", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -227,15 +296,16 @@ function TriggerSection({
   return (
     <div className="field" style={{ marginTop: 14 }}>
       <span className="field-label">Triggers</span>
-      {triggers.length === 0 && <p className="ds-note">No triggers set — this pump only runs manually or on a schedule.</p>}
+      {triggers.length === 0 && <p className="ds-note">No triggers set on this farm yet — pumps only run manually or on a schedule.</p>}
       {triggers.map((t) => {
         const d = deviceOptions.find((x) => x.id === t.deviceId);
+        const p = pumpOptions.find((x) => x.id === t.pumpId);
         return (
           <div key={t.id} className="settings-row">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span className="mr-sub">
                 {d?.name ?? "device"} {metricLabel(t.metric)} {t.comparison === "BELOW" ? "<" : ">"} {t.threshold}
-                {" → "}{t.action === "START" ? "Start" : "Stop"} pump
+                {" → "}{t.action === "START" ? "Start" : "Stop"} {p?.name ?? "pump"}
                 {t.stableDelayMinutes > 0 ? ` (holds ${t.stableDelayMinutes}m)` : ""}
               </span>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -279,17 +349,26 @@ function TriggerSection({
             <option value="STOP">Stop pump</option>
           </select>
         </label>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <label className="field" style={{ flex: 1, minWidth: 120 }}>
+          <span className="field-label">Pump to control</span>
+          <select className="field-input small" value={pumpId} onChange={(e) => setPumpId(e.target.value)}>
+            {pumpOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
         <label className="field" style={{ flex: 1, minWidth: 90 }}>
           <span className="field-label">Stable delay (min)</span>
           <input className="field-input small" type="number" min={0} value={stableDelay} onChange={(e) => setStableDelay(e.target.value)} />
         </label>
       </div>
-      <button className="save-btn small" onClick={add} disabled={saving || threshold === ""}>{saving ? "Adding…" : "Add trigger"}</button>
+      <button className="save-btn small" onClick={add} disabled={saving || threshold === "" || !pumpId}>{saving ? "Adding…" : "Add trigger"}</button>
     </div>
   );
 }
 
-function ScheduleSection({ pumpId, schedules, refetch }: { pumpId: string; schedules: PumpSchedule[]; refetch: () => void }) {
+function ScheduleSection({ pumpOptions, schedules, refetch }: { pumpOptions: Pump[]; schedules: PumpSchedule[]; refetch: () => void }) {
+  const [pumpId, setPumpId] = useState(pumpOptions[0]?.id ?? "");
   const [name, setName] = useState("");
   const [startTime, setStartTime] = useState("06:00");
   const [endTime, setEndTime] = useState("18:00");
@@ -299,7 +378,7 @@ function ScheduleSection({ pumpId, schedules, refetch }: { pumpId: string; sched
   const toggleDay = (d: number) => setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
 
   const add = async () => {
-    if (!name.trim()) return;
+    if (!name.trim() || !pumpId) return;
     setSaving(true);
     await fetch("/api/pump-schedules", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -324,19 +403,28 @@ function ScheduleSection({ pumpId, schedules, refetch }: { pumpId: string; sched
     <div className="field" style={{ marginTop: 16 }}>
       <span className="field-label">Schedules</span>
       {schedules.length === 0 && <p className="ds-note">No preset schedules yet.</p>}
-      {schedules.map((s) => (
-        <div key={s.id} className="settings-row">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="mr-sub">{s.name} · {s.startTime}–{s.endTime} · {s.daysOfWeek.map((d) => DAY_LABELS[d]).join("/")}</span>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <button className="link-btn" onClick={() => toggleEnabled(s)}>{s.enabled ? "On" : "Off"}</button>
-              <button className="link-btn" onClick={() => remove(s.id)} aria-label="Remove schedule"><Trash2 size={14} strokeWidth={1.75} /></button>
+      {schedules.map((s) => {
+        const p = pumpOptions.find((x) => x.id === s.pumpId);
+        return (
+          <div key={s.id} className="settings-row">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span className="mr-sub">{p?.name ?? "pump"} · {s.name} · {s.startTime}–{s.endTime} · {s.daysOfWeek.map((d) => DAY_LABELS[d]).join("/")}</span>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button className="link-btn" onClick={() => toggleEnabled(s)}>{s.enabled ? "On" : "Off"}</button>
+                <button className="link-btn" onClick={() => remove(s.id)} aria-label="Remove schedule"><Trash2 size={14} strokeWidth={1.75} /></button>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       <label className="field" style={{ marginTop: 8 }}>
+        <span className="field-label">Pump</span>
+        <select className="field-input small" value={pumpId} onChange={(e) => setPumpId(e.target.value)}>
+          {pumpOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </label>
+      <label className="field">
         <span className="field-label">Schedule name</span>
         <input className="field-input small" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rural Flex Green only" />
       </label>
@@ -355,7 +443,7 @@ function ScheduleSection({ pumpId, schedules, refetch }: { pumpId: string; sched
           <button key={i} type="button" className={`paddock-chip fert-chip${days.includes(i) ? " on" : ""}`} onClick={() => toggleDay(i)}>{lbl}</button>
         ))}
       </div>
-      <button className="save-btn small" onClick={add} disabled={saving || !name.trim()} style={{ marginTop: 8 }}>{saving ? "Adding…" : "Add schedule"}</button>
+      <button className="save-btn small" onClick={add} disabled={saving || !name.trim() || !pumpId} style={{ marginTop: 8 }}>{saving ? "Adding…" : "Add schedule"}</button>
     </div>
   );
 }

@@ -442,6 +442,8 @@ export type TelemetryDevice = {
   topicKey: string;
   active: boolean;
   sortOrder: number;
+  calibrationOffset: number;
+  calibrationScale: number;
   pump: Pump | null;
   // Latest reading per metric, e.g. { level_pct: {...}, pressure_bar: {...} } — filled in by the API, not stored.
   latest?: Record<string, TelemetryReading>;

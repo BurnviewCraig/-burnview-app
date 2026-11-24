@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "TelemetryDevice" ADD COLUMN     "calibrationOffset" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "calibrationScale" DOUBLE PRECISION NOT NULL DEFAULT 1;

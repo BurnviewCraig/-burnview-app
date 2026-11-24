@@ -6,8 +6,9 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const pumpId = searchParams.get("pumpId") ?? undefined;
+  const farmId = searchParams.get("farmId") ?? undefined;
   const schedules = await prisma.pumpSchedule.findMany({
-    where: pumpId ? { pumpId } : undefined,
+    where: pumpId ? { pumpId } : farmId ? { pump: { farmId } } : undefined,
     orderBy: { sortOrder: "asc" },
   });
   return NextResponse.json({ schedules });

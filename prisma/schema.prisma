@@ -886,6 +886,13 @@ model TelemetryDevice {
   active    Boolean             @default(true)
   sortOrder Int                 @default(0)
   createdAt DateTime            @default(now())
+  // Applied as (raw * calibrationScale + calibrationOffset) to every raw
+  // reading from this device before it's shown anywhere (dashboard, home
+  // screen) or checked against a PumpTrigger threshold — raw readings in
+  // TelemetryReading are never rewritten, so recalibrating never loses or
+  // distorts history, it just changes how it's read from here on.
+  calibrationOffset Float @default(0)
+  calibrationScale  Float @default(1)
 
   farm     Farm               @relation(fields: [farmId], references: [id], onDelete: Cascade)
   readings TelemetryReading[]

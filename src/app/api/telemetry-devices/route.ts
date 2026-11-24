@@ -14,7 +14,9 @@ export async function GET() {
 
   // Latest reading per device+metric, fetched separately since Prisma can't
   // express "most recent row per group" in one findMany — fine at this
-  // scale (a handful of devices, a handful of metrics each).
+  // scale (a handful of devices, a handful of metrics each). Values are
+  // calibrated here (raw * scale + offset) before going out — the stored
+  // TelemetryReading.value is always the untouched raw figure.
   const latestByDevice = new Map<string, Record<string, unknown>>();
   for (const d of devices) {
     const rows = await prisma.telemetryReading.findMany({
@@ -24,7 +26,7 @@ export async function GET() {
     });
     const byMetric: Record<string, unknown> = {};
     for (const r of rows) {
-      if (!byMetric[r.metric]) byMetric[r.metric] = r;
+      if (!byMetric[r.metric]) byMetric[r.metric] = { ...r, value: r.value * d.calibrationScale + d.calibrationOffset };
     }
     latestByDevice.set(d.id, byMetric);
   }
