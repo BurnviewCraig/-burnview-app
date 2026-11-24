@@ -412,3 +412,95 @@ export type MaizePlantingPlan = {
   sortOrder: number;
   ordered: boolean;
 };
+
+export type TelemetryDeviceKind = "TANK_SENSOR" | "PUMP_CONTROLLER" | "PIVOT_CONTROLLER";
+
+export type TelemetryReading = {
+  id: string;
+  deviceId: string;
+  metric: string;
+  value: number;
+  recordedAt: string;
+};
+
+export type Pump = {
+  id: string;
+  farmId: string;
+  deviceId: string;
+  name: string;
+  running: boolean;
+  lastStatusAt: string | null;
+  sortOrder: number;
+};
+
+export type TelemetryDevice = {
+  id: string;
+  farmId: string;
+  farm?: { id: string; name: string };
+  name: string;
+  kind: TelemetryDeviceKind;
+  topicKey: string;
+  active: boolean;
+  sortOrder: number;
+  pump: Pump | null;
+  // Latest reading per metric, e.g. { level_pct: {...}, pressure_bar: {...} } — filled in by the API, not stored.
+  latest?: Record<string, TelemetryReading>;
+};
+
+export type PumpCommandAction = "START" | "STOP";
+export type PumpCommandSource = "MANUAL" | "TRIGGER" | "SCHEDULE";
+export type PumpCommandStatus = "PENDING" | "SENT" | "CONFIRMED" | "FAILED";
+
+export type PumpCommand = {
+  id: string;
+  pumpId: string;
+  action: PumpCommandAction;
+  source: PumpCommandSource;
+  status: PumpCommandStatus;
+  requestedAt: string;
+  sentAt: string | null;
+  confirmedAt: string | null;
+  failReason: string | null;
+};
+
+export type TriggerComparison = "BELOW" | "ABOVE";
+
+export type PumpTrigger = {
+  id: string;
+  pumpId: string;
+  deviceId: string;
+  metric: string;
+  comparison: TriggerComparison;
+  threshold: number;
+  action: PumpCommandAction;
+  stableDelayMinutes: number;
+  enabled: boolean;
+  respectRuraflex: boolean;
+  overrideThreshold: number | null;
+  sortOrder: number;
+};
+
+export type PumpSchedule = {
+  id: string;
+  pumpId: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  daysOfWeek: number[];
+  enabled: boolean;
+  sortOrder: number;
+};
+
+export type RuraflexSeason = "HIGH_DEMAND" | "LOW_DEMAND";
+export type RuraflexDayType = "WEEKDAY" | "SATURDAY" | "SUNDAY";
+export type RuraflexPeriod = "PEAK" | "STANDARD" | "OFF_PEAK";
+
+export type RuraflexBand = {
+  id: string;
+  season: RuraflexSeason;
+  dayType: RuraflexDayType;
+  period: RuraflexPeriod;
+  startTime: string;
+  endTime: string;
+  sortOrder: number;
+};

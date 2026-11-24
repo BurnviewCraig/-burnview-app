@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Users, Sprout, FlaskConical, Leaf, Fuel, Droplets, Gauge, ChevronRight } from "lucide-react";
+import { Users, Sprout, FlaskConical, Leaf, Fuel, Droplets, Gauge, Radio, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
 import { useAccess } from "@/lib/useAccess";
 
@@ -66,6 +66,14 @@ export default function SettingsPage() {
           <div className="menu-row-text">
             <span className="mr-title">Water meters</span>
             <span className="mr-sub">Name &amp; billing group for each water meter</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+        <Link className="menu-row" href="/settings/telemetry">
+          <Radio size={18} strokeWidth={1.75} />
+          <div className="menu-row-text">
+            <span className="mr-title">Telemetry devices</span>
+            <span className="mr-sub">Register TRB141 units and their pumps for remote monitoring/control</span>
           </div>
           <ChevronRight size={16} />
         </Link>

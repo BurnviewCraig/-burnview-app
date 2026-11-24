@@ -975,23 +975,26 @@ enum TriggerComparison {
 // An automatic rule: when `device`'s `metric` crosses `threshold`, fire
 // `action` on `pump`. A tank is typically covered by a pair of these (e.g.
 // level BELOW 20% -> START, ABOVE 90% -> STOP) so it cycles on its own.
-// respectRuraflex lets a START wait for a cheaper tariff band, UNLESS the
-// level also crosses overrideThreshold (a safety floor that forces it
-// regardless of tariff) — overrideThreshold is only meaningful when
-// respectRuraflex is true and is otherwise ignored.
+// stableDelayMinutes debounces a noisy sensor: the crossing must hold for
+// that long before the action actually fires, not just appear in one
+// reading. respectRuraflex lets a START wait for a cheaper tariff band,
+// UNLESS the level also crosses overrideThreshold (a safety floor that
+// forces it regardless of tariff) — overrideThreshold is only meaningful
+// when respectRuraflex is true and is otherwise ignored.
 model PumpTrigger {
-  id                String            @id @default(cuid())
-  pumpId            String
-  deviceId          String // which device's reading this watches — often the pump's own, not always
-  metric            String
-  comparison        TriggerComparison
-  threshold         Float
-  action            PumpCommandAction
-  enabled           Boolean           @default(true)
-  respectRuraflex   Boolean           @default(false)
-  overrideThreshold Float?
-  sortOrder         Int               @default(0)
-  createdAt         DateTime          @default(now())
+  id                 String            @id @default(cuid())
+  pumpId             String
+  deviceId           String // which device's reading this watches — often the pump's own, not always
+  metric             String
+  comparison         TriggerComparison
+  threshold          Float
+  action             PumpCommandAction
+  stableDelayMinutes Int               @default(0)
+  enabled            Boolean           @default(true)
+  respectRuraflex    Boolean           @default(false)
+  overrideThreshold  Float?
+  sortOrder          Int               @default(0)
+  createdAt          DateTime          @default(now())
 
   pump   Pump            @relation(fields: [pumpId], references: [id], onDelete: Cascade)
   device TelemetryDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
