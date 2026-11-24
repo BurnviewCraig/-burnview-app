@@ -6,6 +6,7 @@ import { Settings2, Trash2, X, Play, Square } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { AccessGate } from "@/components/AccessGate";
+import { TankGauge } from "@/components/TankGauge";
 import { useApi } from "@/lib/useApi";
 import type { PumpSchedule, PumpTrigger, TelemetryDevice, TriggerComparison, PumpCommandAction } from "@/lib/types";
 
@@ -121,11 +122,7 @@ function DeviceCard({ device, onChanged, onConfigure }: { device: TelemetryDevic
       </div>
 
       <div className="tm-card-body">
-        {pctEntry && (
-          <div className="tm-gauge" style={{ ["--tm-pct" as string]: Math.max(0, Math.min(100, pctEntry.value)) }}>
-            <span className="tm-gauge-value">{pctEntry.value.toFixed(0)}%</span>
-          </div>
-        )}
+        {pctEntry && <TankGauge pct={pctEntry.value} />}
         <div className="tm-card-info">
           {device.pump ? (
             <span className={`tm-pump-state ${device.pump.running ? "running" : "stopped"}`}>
@@ -134,6 +131,7 @@ function DeviceCard({ device, onChanged, onConfigure }: { device: TelemetryDevic
           ) : !pctEntry && mostRecent ? (
             <span className="tm-pump-state">{formatValue(mostRecent.metric, mostRecent.value)}</span>
           ) : null}
+          {pctEntry && <span className="tm-card-sub">Input {pctEntry.value.toFixed(2)}%</span>}
           {latestEntries.filter((e) => e !== pctEntry).map((e) => (
             <span key={e.metric} className="tm-card-sub">{metricLabel(e.metric)}: {formatValue(e.metric, e.value)}</span>
           ))}

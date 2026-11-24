@@ -76,6 +76,16 @@ a:visited { color: var(--ink); }
 .calendar-widget-event { font-size: 10.5px; color: var(--ink); line-height: 1.3; overflow-wrap: break-word; }
 .calendar-widget-empty { font-size: 11px; color: var(--ink-soft); }
 
+.irrigation-widget { padding: 14px 18px; gap: 10px; width: 100%; }
+.irrigation-widget-head { display: flex; align-items: center; gap: 8px; }
+.irrigation-widget-head .hc-title { margin-top: 0; font-size: 14.5px; }
+.irrigation-widget-tanks { display: flex; gap: 14px; width: 100%; }
+.irrigation-widget-tank { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.irrigation-widget-tank-name { font-size: 10px; font-weight: 700; color: var(--ink-soft); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.tm-gauge.small { width: 54px; height: 54px; }
+.tm-gauge.small::before { inset: 6px; }
+.tm-gauge.small .tm-gauge-value { font-size: 10.5px; }
+
 .empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color: var(--ink-soft); padding: 30px; text-align:center; font-size: 13.5px; }
 
 .menu-list { padding: 8px 0; flex: 1; min-height: 0; overflow-y: auto; }

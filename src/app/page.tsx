@@ -9,7 +9,8 @@ import { todayStr } from "@/lib/utils";
 import { addDays, eventsFromCalendarData, type RawActivity, type RawWalk, type RawGrazing, type RawMilkSale } from "@/lib/calendarFormat";
 import { dueLabel } from "@/lib/diaryFormat";
 import { CalendarColorIcon, FarmColorIcon, CattleColorIcon, GrassColorIcon, StocksColorIcon, DieselColorIcon, IrrigationColorIcon } from "@/components/HomeIcons";
-import type { DiaryEntry } from "@/lib/types";
+import { TankGauge } from "@/components/TankGauge";
+import type { DiaryEntry, TelemetryDevice } from "@/lib/types";
 
 const WIDGET_DAYS = 4; // today + previous 3 — fits comfortably in the card's width
 
@@ -37,6 +38,12 @@ export default function HomePage() {
     for (let i = 0; i < WIDGET_DAYS; i++) list.push(addDays(start, i));
     return list;
   }, [start]);
+
+  // Stock tank levels — the ones that matter most day to day — shown right
+  // on the home screen, not just inside Irrigation, so they're visible
+  // whatever else you opened the app to do.
+  const { data: telemetryData } = useApi<{ devices: TelemetryDevice[] }>("/api/telemetry-devices");
+  const stockTanks = (telemetryData?.devices ?? []).filter((d) => d.kind === "TANK_SENSOR");
 
   return (
     <div className="screen home">
@@ -105,10 +112,26 @@ export default function HomePage() {
           <span className="hc-title">Farm</span>
           <span className="hc-sub">Map &amp; field activities</span>
         </Link>
-        <Link className="home-card" href="/farm/irrigation">
-          <IrrigationColorIcon size={30} />
-          <span className="hc-title">Irrigation</span>
-          <span className="hc-sub">Pivot schedule &amp; mm/week</span>
+        <Link className="home-card irrigation-widget" href="/farm/irrigation">
+          <div className="irrigation-widget-head">
+            <IrrigationColorIcon size={20} />
+            <span className="hc-title">Irrigation</span>
+          </div>
+          {stockTanks.length > 0 ? (
+            <div className="irrigation-widget-tanks">
+              {stockTanks.map((d) => {
+                const level = d.latest?.level_pct;
+                return (
+                  <div key={d.id} className="irrigation-widget-tank">
+                    {level ? <TankGauge pct={level.value} size="small" /> : <span className="tm-no-data">No data</span>}
+                    <span className="irrigation-widget-tank-name">{d.name.replace(" Stock Tank", "")}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <span className="hc-sub">Pivot schedule &amp; mm/week</span>
+          )}
         </Link>
         <Link className="home-card" href="/cattle">
           <CattleColorIcon size={30} />
