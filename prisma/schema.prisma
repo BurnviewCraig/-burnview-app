@@ -14,6 +14,11 @@ model User {
   passwordHash   String
   createdAt      DateTime @default(now())
   isAdmin        Boolean  @default(false)
+  // 3 wrong passwords in a row sets lockedAt and blocks sign-in — even with
+  // the correct password — until an admin clears it (see /api/users/[id]
+  // "unlock"). Resets to 0 on any successful sign-in.
+  failedLoginAttempts Int       @default(0)
+  lockedAt            DateTime?
   // Null means full access (grandfathers in existing/newly created users).
   // Once an admin edits a user's access it becomes a concrete object —
   // see src/lib/permissions.ts for the shape and the access check.

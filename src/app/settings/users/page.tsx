@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, X, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Pencil, Trash2, X, ShieldAlert, ShieldCheck, Lock, LockOpen } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Spinner } from "@/components/Spinner";
 import { useApi } from "@/lib/useApi";
@@ -9,7 +9,7 @@ import { useAccess } from "@/lib/useAccess";
 import { SECTION_DEFS, type SectionAccess } from "@/lib/permissions";
 import type { Farm } from "@/lib/types";
 
-type UserRow = { id: string; username: string; name: string; createdAt: string; isAdmin: boolean; sectionAccess: SectionAccess | null };
+type UserRow = { id: string; username: string; name: string; createdAt: string; isAdmin: boolean; sectionAccess: SectionAccess | null; lockedAt: string | null };
 
 // Expands a possibly-null sectionAccess into a concrete, fully-populated
 // object so the checkboxes have something definite to show/toggle —
@@ -130,6 +130,16 @@ function UsersSettingsPageInner() {
     refetch();
   };
 
+  const [unlockingId, setUnlockingId] = useState<string | null>(null);
+  const handleUnlock = async (u: UserRow) => {
+    setUnlockingId(u.id);
+    await fetch(`/api/users/${u.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unlock: true }),
+    });
+    setUnlockingId(null);
+    refetch();
+  };
+
   const handleDelete = async (u: UserRow) => {
     if (!confirm(`Delete ${u.name} (@${u.username})? Their past entries stay on record, but they'll no longer be able to sign in.`)) return;
     const res = await fetch(`/api/users/${u.id}`, { method: "DELETE" });
@@ -237,10 +247,16 @@ function UsersSettingsPageInner() {
                   <div className="settings-row-head">
                     <span className="settings-row-title">
                       {u.name} {u.isAdmin && <ShieldCheck size={14} style={{ verticalAlign: "-2px", color: "#2E7D32" }} />}
+                      {u.lockedAt && <span className="placeholder-badge" style={{ marginLeft: 6 }}><Lock size={10} style={{ verticalAlign: "-1px", marginRight: 3 }} />LOCKED</span>}
                     </span>
                     <span className="mr-sub">@{u.username}</span>
                   </div>
                   <div style={{ display: "flex", gap: 10 }}>
+                    {u.lockedAt && (
+                      <button className="link-btn" onClick={() => handleUnlock(u)} disabled={unlockingId === u.id}>
+                        <LockOpen size={14} /> {unlockingId === u.id ? "Unlocking…" : "Unlock"}
+                      </button>
+                    )}
                     <button className="link-btn" onClick={() => startEdit(u)}><Pencil size={14} /></button>
                     {u.id !== me?.id && (
                       <button className="link-btn" onClick={() => handleDelete(u)}><Trash2 size={14} /></button>

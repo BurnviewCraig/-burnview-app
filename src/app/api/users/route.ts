@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   const users = await prisma.user.findMany({
-    select: { id: true, username: true, name: true, createdAt: true, isAdmin: true, sectionAccess: true },
+    select: { id: true, username: true, name: true, createdAt: true, isAdmin: true, sectionAccess: true, lockedAt: true },
     orderBy: { createdAt: "asc" },
   });
   return NextResponse.json({ users });

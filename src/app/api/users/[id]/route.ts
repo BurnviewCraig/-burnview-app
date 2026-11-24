@@ -46,11 +46,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if ("sectionAccess" in body) {
     data.sectionAccess = body.sectionAccess === null ? Prisma.DbNull : body.sectionAccess;
   }
+  if (body.unlock === true) {
+    data.failedLoginAttempts = 0;
+    data.lockedAt = null;
+  }
 
   const user = await prisma.user.update({
     where: { id },
     data,
-    select: { id: true, username: true, name: true, createdAt: true, isAdmin: true, sectionAccess: true },
+    select: { id: true, username: true, name: true, createdAt: true, isAdmin: true, sectionAccess: true, lockedAt: true },
   });
   return NextResponse.json({ user });
 }

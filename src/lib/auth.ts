@@ -22,8 +22,25 @@ export const authOptions: AuthOptions = {
           where: { username: credentials.username.trim().toLowerCase() },
         });
         if (!user) return null;
+
+        // Locked stays locked even against the right password — only an
+        // admin clearing it (Settings > Users > Unlock) lifts this.
+        if (user.lockedAt) throw new Error("locked");
+
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!valid) return null;
+        if (!valid) {
+          const attempts = user.failedLoginAttempts + 1;
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { failedLoginAttempts: attempts, lockedAt: attempts >= 3 ? new Date() : null },
+          });
+          if (attempts >= 3) throw new Error("locked");
+          return null;
+        }
+
+        if (user.failedLoginAttempts > 0) {
+          await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0 } });
+        }
         return { id: user.id, name: user.name, username: user.username };
       },
     }),

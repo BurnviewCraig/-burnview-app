@@ -24,7 +24,11 @@ function LoginForm() {
     });
     setLoading(false);
     if (res?.error) {
-      setError("Wrong username or password.");
+      setError(
+        res.error === "locked"
+          ? "This account is locked after too many wrong attempts — ask Craig to unlock it."
+          : "Wrong username or password."
+      );
       return;
     }
     router.push(params.get("callbackUrl") || "/");
