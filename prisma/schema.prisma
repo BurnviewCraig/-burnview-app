@@ -38,6 +38,7 @@ model User {
   diaryEntries    DiaryEntry[]
   irrigationRuns  IrrigationRun[]
   waterMeterReadings WaterMeterReading[]
+  pumpCommands    PumpCommand[]
 }
 
 model Farm {
@@ -64,6 +65,8 @@ model Farm {
   pivots          Pivot[]
   waterMeters     WaterMeter[]
   milkQualityEntries MilkQualityEntry[]
+  telemetryDevices TelemetryDevice[]
+  pumps           Pump[]
 }
 
 model Paddock {
@@ -844,4 +847,203 @@ model MaizePlantingPlan {
   paddock   Paddock      @relation(fields: [paddockId], references: [id], onDelete: Cascade)
   variety   SeedVariety? @relation(fields: [varietyId], references: [id])
   createdBy User?        @relation(fields: [createdById], references: [id])
+}
+
+// --- Remote telemetry & pump control (TRB141 modules over MQTT/HiveMQ) ---
+//
+// Architecture: each TRB141 publishes readings (and, for a pump, its
+// run-confirmation input) to HiveMQ under a topic namespaced by
+// TelemetryDevice.topicKey. A small always-on worker process (outside this
+// Vercel app, since Vercel can't hold an open MQTT session) subscribes to
+// every device's topic, writes incoming readings to TelemetryReading, keeps
+// Pump.running in sync, and polls PumpCommand for PENDING rows to publish as
+// MQTT commands. This app only ever reads that data and writes PENDING
+// PumpCommand rows (for manual start/stop) or Pump/PumpTrigger/PumpSchedule
+// config — it never talks to MQTT directly. Hard safety interlocks (don't
+// run dry, stop if run-confirmation never arrives) belong on the TRB141
+// itself, not in this app or the worker.
+
+enum TelemetryDeviceKind {
+  TANK_SENSOR      // level and/or pressure only, no control output
+  PUMP_CONTROLLER  // start/stop relay + run-confirmation input, for a tank's pump
+  PIVOT_CONTROLLER // pressure sensor feeding the pivot pump house VSD loop
+}
+
+// A physical TRB141 (or similar) unit. One row per unit, not per sensor —
+// a single TRB141 can report more than one metric (e.g. the pump-house unit
+// reports pressure AND run-confirmation).
+model TelemetryDevice {
+  id        String              @id @default(cuid())
+  farmId    String
+  name      String // e.g. "Tank 3", "Pivot first tower", "Pivot pump house"
+  kind      TelemetryDeviceKind
+  topicKey  String              @unique // MQTT topic namespace this device publishes/subscribes under
+  active    Boolean             @default(true)
+  sortOrder Int                 @default(0)
+  createdAt DateTime            @default(now())
+
+  farm     Farm               @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  readings TelemetryReading[]
+  pump     Pump?
+  triggers PumpTrigger[]
+}
+
+// One metric reading from a device at a point in time — e.g. metric
+// "level_pct" or "pressure_bar", value in that metric's natural unit.
+// metric is free text rather than an enum since device kinds report
+// different things and this avoids a schema change per new metric.
+model TelemetryReading {
+  id         String   @id @default(cuid())
+  deviceId   String
+  metric     String
+  value      Float
+  recordedAt DateTime
+
+  device TelemetryDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, metric, recordedAt])
+}
+
+// A controllable pump, tied 1:1 to the TelemetryDevice holding its
+// start/stop relay + run-confirmation input. `running` is the last
+// CONFIRMED state from that input, not just "a start command was sent" —
+// the dashboard should show reality, not intent.
+model Pump {
+  id           String    @id @default(cuid())
+  farmId       String
+  deviceId     String    @unique
+  name         String
+  running      Boolean   @default(false)
+  lastStatusAt DateTime?
+  sortOrder    Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  farm      Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  device    TelemetryDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  commands  PumpCommand[]
+  triggers  PumpTrigger[]
+  schedules PumpSchedule[]
+}
+
+enum PumpCommandAction {
+  START
+  STOP
+}
+
+enum PumpCommandSource {
+  MANUAL
+  TRIGGER
+  SCHEDULE
+}
+
+enum PumpCommandStatus {
+  PENDING
+  SENT
+  CONFIRMED
+  FAILED
+}
+
+// One start/stop instruction. A manual tap in the app creates one of these
+// as source=MANUAL, status=PENDING; the worker is what actually publishes
+// it to MQTT (flips to SENT) and later CONFIRMED once the device's
+// run-confirmation input agrees, or FAILED if that never arrives. The
+// worker writes its own rows already SENT for TRIGGER/SCHEDULE actions,
+// since by the time it writes one it has already published it.
+model PumpCommand {
+  id            String            @id @default(cuid())
+  pumpId        String
+  action        PumpCommandAction
+  source        PumpCommandSource
+  status        PumpCommandStatus @default(PENDING)
+  requestedById String?
+  requestedAt   DateTime          @default(now())
+  sentAt        DateTime?
+  confirmedAt   DateTime?
+  failReason    String?
+
+  pump        Pump  @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  requestedBy User? @relation(fields: [requestedById], references: [id])
+
+  @@index([pumpId, status])
+}
+
+enum TriggerComparison {
+  BELOW
+  ABOVE
+}
+
+// An automatic rule: when `device`'s `metric` crosses `threshold`, fire
+// `action` on `pump`. A tank is typically covered by a pair of these (e.g.
+// level BELOW 20% -> START, ABOVE 90% -> STOP) so it cycles on its own.
+// respectRuraflex lets a START wait for a cheaper tariff band, UNLESS the
+// level also crosses overrideThreshold (a safety floor that forces it
+// regardless of tariff) — overrideThreshold is only meaningful when
+// respectRuraflex is true and is otherwise ignored.
+model PumpTrigger {
+  id                String            @id @default(cuid())
+  pumpId            String
+  deviceId          String // which device's reading this watches — often the pump's own, not always
+  metric            String
+  comparison        TriggerComparison
+  threshold         Float
+  action            PumpCommandAction
+  enabled           Boolean           @default(true)
+  respectRuraflex   Boolean           @default(false)
+  overrideThreshold Float?
+  sortOrder         Int               @default(0)
+  createdAt         DateTime          @default(now())
+
+  pump   Pump            @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+  device TelemetryDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+// A preset on/off time window for a pump — toggled as a whole via `enabled`
+// (the dashboard's "scheduling" button) rather than deleted/recreated each
+// time it's needed. daysOfWeek uses 0=Sunday..6=Saturday (JS Date#getDay).
+model PumpSchedule {
+  id         String   @id @default(cuid())
+  pumpId     String
+  name       String
+  startTime  String // "HH:MM", farm-local time
+  endTime    String
+  daysOfWeek Int[]
+  enabled    Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  pump Pump @relation(fields: [pumpId], references: [id], onDelete: Cascade)
+}
+
+enum RuraflexSeason {
+  HIGH_DEMAND // Eskom's Jun-Aug high-demand season
+  LOW_DEMAND  // Sep-May
+}
+
+enum RuraflexDayType {
+  WEEKDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum RuraflexPeriod {
+  PEAK
+  STANDARD
+  OFF_PEAK
+}
+
+// One time band in the Ruraflex tariff structure — e.g. High demand season,
+// Weekday, 07:00-10:00 = PEAK. Kept editable (Settings) rather than
+// hardcoded since Eskom revises these periodically. A PumpTrigger with
+// respectRuraflex looks up "what period is it right now" by matching
+// today's season+day-type against these rows.
+model RuraflexBand {
+  id        String          @id @default(cuid())
+  season    RuraflexSeason
+  dayType   RuraflexDayType
+  period    RuraflexPeriod
+  startTime String // "HH:MM"
+  endTime   String
+  sortOrder Int             @default(0)
+
+  @@unique([season, dayType, startTime])
 }
