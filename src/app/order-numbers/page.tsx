@@ -125,6 +125,8 @@ function OrderNumbersPageInner() {
             <button key={o.id} className={`walk-row${active?.id === o.id ? " active" : ""}`} onClick={() => openEntry(o)}>
               <span className="wr-code">{o.prefix}{o.number}</span>
               <span className="field-editor-sub">
+                {new Date(o.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}
+                {" · "}
                 {o.company || "No company set"}
                 {o.item ? ` · ${o.item}` : ""}
                 {o.farm ? ` · ${o.farm.name}` : ""}
@@ -139,6 +141,9 @@ function OrderNumbersPageInner() {
           <div className="keypad-header">
             <div className="stock-panel-title">
               <span className="keypad-code">{active.prefix}{active.number}</span>
+              <span className="field-editor-sub">
+                {new Date(active.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
             </div>
             <X size={18} className="close" onClick={() => setActive(null)} />
           </div>
