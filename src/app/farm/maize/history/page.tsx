@@ -12,6 +12,7 @@ import { FARM_SECTIONS } from "@/lib/constants";
 import type { Farm, MaizeFieldSeason } from "@/lib/types";
 
 const COLUMN_STORAGE_KEY = "maize-history-column-order";
+const ALL_FARMS_ID = "__all__";
 
 type ColumnKey =
   | "season" | "variety" | "varietyLength" | "plantDate" | "estMaturityDate" | "cutDate"
@@ -255,7 +256,10 @@ function FieldDetailSheet({
   );
 }
 
-type FieldRow = { id: string; code: string; maizeSortOrder: number | null; seasons: MaizeFieldSeason[]; memberIds?: string[] };
+type FieldRow = {
+  id: string; code: string; maizeSortOrder: number | null; seasons: MaizeFieldSeason[]; memberIds?: string[];
+  farmId?: string; farmName?: string; farmSlug?: string;
+};
 
 // A pivot/section (see FARM_SECTIONS) where every one of its camps has the
 // exact same season record — same variety, dates, population etc. Detected
@@ -300,95 +304,137 @@ function findSectionMatches(farmSlug: string, fields: FieldRow[]): SectionMatch[
   return matches;
 }
 
+function buildFieldRows(farm: Farm, seasons: MaizeFieldSeason[]): FieldRow[] {
+  const byId = new Map<string, FieldRow>();
+  farm.paddocks.filter((p) => p.landType === "Maize").forEach((p) =>
+    byId.set(p.id, { id: p.id, code: p.code, maizeSortOrder: p.maizeSortOrder, seasons: [], farmId: farm.id, farmName: farm.name, farmSlug: farm.slug })
+  );
+  seasons.filter((s) => s.farmId === farm.id).forEach((s) => {
+    const existing = byId.get(s.paddockId);
+    if (existing) existing.seasons.push(s);
+    else byId.set(s.paddockId, { id: s.paddockId, code: s.paddockCode ?? s.paddockId, maizeSortOrder: null, seasons: [s], farmId: farm.id, farmName: farm.name, farmSlug: farm.slug });
+  });
+  return [...byId.values()].filter((f) => f.seasons.length > 0);
+}
+
+// Fields are ordered by their most recent season's plant date (earliest
+// first) so the sheet reads as a planting timeline — fields with no plant
+// date yet sort to the end.
+function latestPlantDate(f: FieldRow): string | null {
+  let best: MaizeFieldSeason | null = null;
+  for (const s of f.seasons) {
+    if (!best || s.season > best.season) best = s;
+    else if (s.season === best.season && (s.plantDate ?? "") > (best.plantDate ?? "")) best = s;
+  }
+  return best?.plantDate ?? null;
+}
+
+function sortByPlantDate(fields: FieldRow[]): FieldRow[] {
+  return [...fields].sort((a, b) => {
+    const da = latestPlantDate(a);
+    const db = latestPlantDate(b);
+    if (da && db) return da === db ? a.code.localeCompare(b.code, undefined, { numeric: true }) : da < db ? -1 : 1;
+    if (da) return -1;
+    if (db) return 1;
+    return a.code.localeCompare(b.code, undefined, { numeric: true });
+  });
+}
+
+// Groups a farm's fields into section rows wherever every camp in a section
+// (see FARM_SECTIONS) shares an identical season record, same as the
+// single-farm view always did — just callable per-farm so the All Farms
+// view can run it once per farm and merge the results.
+function buildDisplayRows(farm: Farm, seasons: MaizeFieldSeason[], expandedSections: Set<string>): { fields: FieldRow[]; sectionMatches: SectionMatch[]; displayFields: FieldRow[] } {
+  const fields = sortByPlantDate(buildFieldRows(farm, seasons));
+  const sectionMatches = findSectionMatches(farm.slug, fields);
+  const activeMatches = sectionMatches.filter((m) => !expandedSections.has(`${farm.slug}:${m.sectionName}`));
+
+  if (activeMatches.length === 0) return { fields, sectionMatches, displayFields: fields };
+
+  const indexOf = new Map(fields.map((f, i) => [f.id, i]));
+  const consumedSeasonIds = new Set(activeMatches.flatMap((m) => m.seasonIds));
+  const consumedFieldIds = new Set(activeMatches.flatMap((m) => m.fieldIds));
+
+  const bySection = new Map<string, SectionMatch[]>();
+  activeMatches.forEach((m) => bySection.set(m.sectionName, [...(bySection.get(m.sectionName) ?? []), m]));
+  const groupRows = [...bySection.entries()].map(([name, matches]) => ({
+    row: {
+      id: `group:${farm.slug}:${name}`,
+      code: name,
+      maizeSortOrder: null,
+      seasons: [...matches].sort((a, b) => (a.season < b.season ? 1 : -1)).map((m) => m.representative),
+      memberIds: [...new Set(matches.flatMap((m) => m.fieldIds))],
+      farmId: farm.id, farmName: farm.name, farmSlug: farm.slug,
+    } as FieldRow,
+    index: Math.min(...matches.flatMap((m) => m.fieldIds.map((id) => indexOf.get(id) ?? Infinity))),
+  }));
+
+  const remaining = fields
+    .map((f) => ({ row: { ...f, seasons: f.seasons.filter((s) => !consumedSeasonIds.has(s.id)) }, index: indexOf.get(f.id)! }))
+    .filter(({ row }) => row.seasons.length > 0 || !consumedFieldIds.has(row.id));
+
+  const displayFields = [...remaining, ...groupRows].sort((a, b) => a.index - b.index).map((r) => r.row);
+  return { fields, sectionMatches, displayFields };
+}
+
 export default function MaizeHistoryPage() {
   const { data: farmsData, loading, refetch: refetchFarms } = useApi<{ farms: Farm[] }>("/api/farms");
   const farms = farmsData?.farms ?? [];
   const [farmId, setFarmId] = useState<string | null>(null);
-  const farm = farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0];
-  const [selected, setSelected] = useState<{ id: string; code: string; seasonId: string | null } | null>(null);
+  const showingAll = farmId === ALL_FARMS_ID;
+  const farm = !showingAll ? (farms.find((f) => f.id === (farmId ?? farms[0]?.id)) ?? farms[0]) : undefined;
+  const [selected, setSelected] = useState<{ farmId: string; id: string; code: string; seasonId: string | null } | null>(null);
   const [dragKey, setDragKey] = useState<ColumnKey | null>(null);
   const { order, reorder } = useColumnOrder();
 
-  const { data: seasonsData, refetch: refetchSeasons } = useApi<{ entries: MaizeFieldSeason[] }>(farm ? `/api/maize-field-seasons?farmId=${farm.id}` : null);
+  const { data: seasonsData, refetch: refetchSeasons } = useApi<{ entries: MaizeFieldSeason[] }>(
+    showingAll ? "/api/maize-field-seasons" : farm ? `/api/maize-field-seasons?farmId=${farm.id}` : null
+  );
   const refetch = () => { refetchSeasons(); refetchFarms(); };
+  const seasons = seasonsData?.entries ?? [];
+
+  // Which sections currently have a full, identical match are found fresh
+  // from the data every render; "expanded" ones are ones the user chose to
+  // see broken out into individual camps anyway. Keys are namespaced by
+  // farm slug so the All Farms view can't conflate two farms' sections.
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const toggleSectionExpanded = (key: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   // A field belongs here if it has any season history at all — classifying
   // a field Maize doesn't by itself put it in this list, only an actual
   // logged season does (so an unplanted field, e.g. V2, doesn't show up
   // with a row of dashes). A field rotated out of maize still keeps its
   // past records visible. Every season shows as its own row, not just the
-  // latest. Fields are ordered by their most recent season's plant date
-  // (earliest first) so the sheet reads as a planting timeline, making it
-  // easy to spot a field whose spray/top-dressing dates are out of step
-  // with neighbours planted around the same time. Fields with no plant
-  // date yet sort to the end.
-  const sizeHaByPaddockId = useMemo(() => new Map((farm?.paddocks ?? []).map((p) => [p.id, p.sizeHa])), [farm]);
-  const fields = useMemo<FieldRow[]>(() => {
-    if (!farm) return [];
-    const byId = new Map<string, FieldRow>();
-    farm.paddocks.filter((p) => p.landType === "Maize").forEach((p) => byId.set(p.id, { id: p.id, code: p.code, maizeSortOrder: p.maizeSortOrder, seasons: [] }));
-    (seasonsData?.entries ?? []).forEach((s) => {
-      const existing = byId.get(s.paddockId);
-      if (existing) existing.seasons.push(s);
-      else byId.set(s.paddockId, { id: s.paddockId, code: s.paddockCode ?? s.paddockId, maizeSortOrder: null, seasons: [s] });
-    });
-    const latestPlantDate = (f: FieldRow): string | null => {
-      let best: MaizeFieldSeason | null = null;
-      for (const s of f.seasons) {
-        if (!best || s.season > best.season) best = s;
-        else if (s.season === best.season && (s.plantDate ?? "") > (best.plantDate ?? "")) best = s;
-      }
-      return best?.plantDate ?? null;
-    };
-    return [...byId.values()].filter((f) => f.seasons.length > 0).sort((a, b) => {
-      const da = latestPlantDate(a);
-      const db = latestPlantDate(b);
-      if (da && db) return da === db ? a.code.localeCompare(b.code, undefined, { numeric: true }) : da < db ? -1 : 1;
-      if (da) return -1;
-      if (db) return 1;
-      return a.code.localeCompare(b.code, undefined, { numeric: true });
-    });
-  }, [farm, seasonsData]);
+  // latest. In the All Farms view, each farm's rows are built the same way
+  // as the single-farm view and then merged, re-sorted by plant date across
+  // every farm together.
+  const perFarm = useMemo(() => {
+    const list = showingAll ? farms : farm ? [farm] : [];
+    return list.map((f) => ({ farm: f, ...buildDisplayRows(f, seasons, expandedSections) }));
+  }, [showingAll, farms, farm, seasons, expandedSections]);
 
-  // Which sections currently have a full, identical match are found fresh
-  // from the data every render; "expanded" ones are ones the user chose to
-  // see broken out into individual camps anyway.
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
-  const sectionMatches = useMemo(() => (farm ? findSectionMatches(farm.slug, fields) : []), [farm, fields]);
-  const activeMatches = useMemo(() => sectionMatches.filter((m) => !expandedSections.has(m.sectionName)), [sectionMatches, expandedSections]);
-  const toggleSectionExpanded = (name: string) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
-      return next;
-    });
-  };
+  const sectionMatches = useMemo(
+    () => perFarm.flatMap((p) => p.sectionMatches.map((m) => ({ ...m, farmSlug: p.farm.slug, farmName: p.farm.name }))),
+    [perFarm]
+  );
+
+  const fieldsEmpty = perFarm.every((p) => p.fields.length === 0);
 
   const displayFields = useMemo<FieldRow[]>(() => {
-    if (activeMatches.length === 0) return fields;
-    const indexOf = new Map(fields.map((f, i) => [f.id, i]));
-    const consumedSeasonIds = new Set(activeMatches.flatMap((m) => m.seasonIds));
-    const consumedFieldIds = new Set(activeMatches.flatMap((m) => m.fieldIds));
+    const merged = perFarm.flatMap((p) => p.displayFields);
+    return showingAll ? sortByPlantDate(merged) : merged;
+  }, [perFarm, showingAll]);
 
-    const bySection = new Map<string, SectionMatch[]>();
-    activeMatches.forEach((m) => bySection.set(m.sectionName, [...(bySection.get(m.sectionName) ?? []), m]));
-    const groupRows = [...bySection.entries()].map(([name, matches]) => ({
-      row: {
-        id: `group:${name}`,
-        code: name,
-        maizeSortOrder: null,
-        seasons: [...matches].sort((a, b) => (a.season < b.season ? 1 : -1)).map((m) => m.representative),
-        memberIds: [...new Set(matches.flatMap((m) => m.fieldIds))],
-      } as FieldRow,
-      index: Math.min(...matches.flatMap((m) => m.fieldIds.map((id) => indexOf.get(id) ?? Infinity))),
-    }));
-
-    const remaining = fields
-      .map((f) => ({ row: { ...f, seasons: f.seasons.filter((s) => !consumedSeasonIds.has(s.id)) }, index: indexOf.get(f.id)! }))
-      .filter(({ row }) => row.seasons.length > 0 || !consumedFieldIds.has(row.id));
-
-    return [...remaining, ...groupRows].sort((a, b) => a.index - b.index).map((r) => r.row);
-  }, [fields, activeMatches]);
+  const sizeHaByPaddockId = useMemo(
+    () => new Map((showingAll ? farms.flatMap((f) => f.paddocks) : farm?.paddocks ?? []).map((p) => [p.id, p.sizeHa])),
+    [showingAll, farms, farm]
+  );
 
   // Hectares planted = sum of each distinct field's size, counted once even
   // when a combined section row stands in for several camps.
@@ -402,33 +448,34 @@ export default function MaizeHistoryPage() {
   }, [displayFields, sizeHaByPaddockId]);
 
   if (loading) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><Spinner /></div>;
-  if (!farm) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><div className="empty">No farms found.</div></div>;
+  if (!farms.length) return <div className="screen"><Header title="Maize History" backHref="/farm/maize" /><div className="empty">No farms found.</div></div>;
 
   return (
     <div className="screen">
       <Header title="Maize History" backHref="/farm/maize" />
       <div className="tabs">
         {farms.map((f) => (
-          <button key={f.id} className={`tab${farm.id === f.id ? " active" : ""}`} onClick={() => { setFarmId(f.id); setSelected(null); setExpandedSections(new Set()); }}>{f.name}</button>
+          <button key={f.id} className={`tab${!showingAll && farm?.id === f.id ? " active" : ""}`} onClick={() => { setFarmId(f.id); setSelected(null); setExpandedSections(new Set()); }}>{f.name}</button>
         ))}
+        <button className={`tab${showingAll ? " active" : ""}`} onClick={() => { setFarmId(ALL_FARMS_ID); setSelected(null); setExpandedSections(new Set()); }}>All Farms</button>
       </div>
 
-      {fields.length === 0 ? (
-        <p className="ds-note" style={{ padding: "12px 18px" }}>No maize fields classified on {farm.name} yet — classify a field as Maize in Edit fields first.</p>
+      {fieldsEmpty ? (
+        <p className="ds-note" style={{ padding: "12px 18px" }}>No maize fields classified{showingAll ? "" : ` on ${farm?.name}`} yet — classify a field as Maize in Edit fields first.</p>
       ) : (
         <>
           <p className="field-hint" style={{ padding: "10px 18px 0" }}>
-            Fields are ordered by planting date, earliest first — drag a column heading to reorder columns. Tap a row to see or edit that season.
+            {showingAll ? "Every farm's fields, " : "Fields are "}ordered by planting date, earliest first — drag a column heading to reorder columns. Tap a row to see or edit that season.
           </p>
           {sectionMatches.length > 0 && (
             <div className="chip-wrap" style={{ padding: "0 18px 8px" }}>
-              {[...new Set(sectionMatches.map((m) => m.sectionName))].map((name) => (
+              {[...new Map(sectionMatches.map((m) => [`${m.farmSlug}:${m.sectionName}`, m])).entries()].map(([key, m]) => (
                 <button
-                  key={name}
-                  className={`range-chip${expandedSections.has(name) ? "" : " on"}`}
-                  onClick={() => toggleSectionExpanded(name)}
+                  key={key}
+                  className={`range-chip${expandedSections.has(key) ? "" : " on"}`}
+                  onClick={() => toggleSectionExpanded(key)}
                 >
-                  {name}{expandedSections.has(name) ? " (split out)" : " (combined)"}
+                  {showingAll ? `${m.farmName} — ${m.sectionName}` : m.sectionName}{expandedSections.has(key) ? " (split out)" : " (combined)"}
                 </button>
               ))}
             </div>
@@ -460,15 +507,17 @@ export default function MaizeHistoryPage() {
                 {displayFields.map((field) => {
                   const isGroup = field.id.startsWith("group:");
                   const rowSpan = field.seasons.length || 1;
+                  const label = showingAll && field.farmName ? `${field.farmName} — ${field.code}` : field.code;
+                  const sectionKey = `${field.farmSlug}:${field.code}`;
                   return field.seasons.length ? (
                     field.seasons.map((s, i) => (
                       <tr
                         key={s.id}
-                        onClick={() => (isGroup ? toggleSectionExpanded(field.code) : setSelected({ id: field.id, code: field.code, seasonId: s.id }))}
+                        onClick={() => (isGroup ? toggleSectionExpanded(sectionKey) : setSelected({ farmId: field.farmId!, id: field.id, code: field.code, seasonId: s.id }))}
                       >
                         {i === 0 && (
                           <td className="maize-sheet-sticky" rowSpan={rowSpan}>
-                            <strong>{field.code}</strong>
+                            <strong>{label}</strong>
                             {isGroup && <span className="ds-note" style={{ display: "block", fontWeight: 400 }}>all camps planted the same</span>}
                           </td>
                         )}
@@ -476,8 +525,8 @@ export default function MaizeHistoryPage() {
                       </tr>
                     ))
                   ) : (
-                    <tr key={field.id} onClick={() => setSelected({ id: field.id, code: field.code, seasonId: null })}>
-                      <td className="maize-sheet-sticky"><strong>{field.code}</strong></td>
+                    <tr key={field.id} onClick={() => setSelected({ farmId: field.farmId!, id: field.id, code: field.code, seasonId: null })}>
+                      <td className="maize-sheet-sticky"><strong>{label}</strong></td>
                       {order.map((key) => <td key={key}>—</td>)}
                     </tr>
                   );
@@ -496,7 +545,7 @@ export default function MaizeHistoryPage() {
 
       {selected && (
         <FieldDetailSheet
-          farmId={farm.id}
+          farmId={selected.farmId}
           paddockId={selected.id}
           paddockCode={selected.code}
           initialSeasonId={selected.seasonId}
