@@ -140,38 +140,40 @@ function CattlePageInner() {
         <button className={`tab${showingAll ? " active" : ""}`} onClick={() => setFarmId(ALL_FARMS_ID)}>All Farms</button>
       </div>
 
-      {showingAll ? (
-        <SummaryPanel farmId={ALL_FARMS_ID} label="Business" slug={null} />
-      ) : (
-        <>
-          {farm && <SummaryPanel farmId={farm.id} label={farm.name} slug={farm.slug} />}
-          {groups.length === 0 ? (
-            <p className="ds-note" style={{ padding: "12px 18px" }}>No milking groups set up for {farm?.name}.</p>
-          ) : (
-            <div className="cattle-group-grid">
-              {groups.map((g) => {
-                const variation =
-                  g.currentMilkPerCow != null && g.previousMilkPerCow != null
-                    ? Math.round((g.currentMilkPerCow - g.previousMilkPerCow) * 10) / 10
-                    : null;
-                return (
-                  <Link key={g.id} className="cattle-group-box" href={`/cattle/group?id=${g.id}`}>
-                    <span className="cgb-name">{g.name}</span>
-                    <span className="cgb-milk">{g.currentMilkPerCow != null ? `${g.currentMilkPerCow} L/cow` : "No milk logged"}</span>
-                    {variation != null && (
-                      <span className={`cgb-variation${variation > 0 ? " up" : variation < 0 ? " down" : ""}`}>
-                        {variation > 0 ? "▲" : variation < 0 ? "▼" : "–"} {Math.abs(variation)}
-                      </span>
-                    )}
-                    <span className="cgb-count">{g.currentCount != null ? `${g.currentCount} head` : "No count set"}</span>
-                    <span className="cgb-count">{g.currentDaysInMilk != null ? `${g.currentDaysInMilk} DIM` : "No DIM logged"}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
+      <div className="cattle-scroll">
+        {showingAll ? (
+          <SummaryPanel farmId={ALL_FARMS_ID} label="Business" slug={null} />
+        ) : (
+          <>
+            {farm && <SummaryPanel farmId={farm.id} label={farm.name} slug={farm.slug} />}
+            {groups.length === 0 ? (
+              <p className="ds-note" style={{ padding: "12px 18px" }}>No milking groups set up for {farm?.name}.</p>
+            ) : (
+              <div className="cattle-group-grid">
+                {groups.map((g) => {
+                  const variation =
+                    g.currentMilkPerCow != null && g.previousMilkPerCow != null
+                      ? Math.round((g.currentMilkPerCow - g.previousMilkPerCow) * 10) / 10
+                      : null;
+                  return (
+                    <Link key={g.id} className="cattle-group-box" href={`/cattle/group?id=${g.id}`}>
+                      <span className="cgb-name">{g.name}</span>
+                      <span className="cgb-milk">{g.currentMilkPerCow != null ? `${g.currentMilkPerCow} L/cow` : "No milk logged"}</span>
+                      {variation != null && (
+                        <span className={`cgb-variation${variation > 0 ? " up" : variation < 0 ? " down" : ""}`}>
+                          {variation > 0 ? "▲" : variation < 0 ? "▼" : "–"} {Math.abs(variation)}
+                        </span>
+                      )}
+                      <span className="cgb-count">{g.currentCount != null ? `${g.currentCount} head` : "No count set"}</span>
+                      <span className="cgb-count">{g.currentDaysInMilk != null ? `${g.currentDaysInMilk} DIM` : "No DIM logged"}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

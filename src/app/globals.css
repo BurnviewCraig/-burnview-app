@@ -112,6 +112,7 @@ a:visited { color: var(--ink); }
 .fc-name { font-weight: 600; font-size: 14.5px; }
 .fc-stats { display:flex; gap: 18px; flex-wrap: wrap; }
 
+.cattle-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .cattle-group-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px 18px; }
 .cattle-group-box {
   display:flex; flex-direction:column; align-items:flex-start; gap: 4px;
