@@ -72,6 +72,7 @@ model Farm {
   milkQualityEntries MilkQualityEntry[]
   telemetryDevices TelemetryDevice[]
   pumps           Pump[]
+  electricityMeters ElectricityMeter[]
 }
 
 model Paddock {
@@ -1061,4 +1062,54 @@ model RuraflexBand {
   sortOrder Int             @default(0)
 
   @@unique([season, dayType, startTime])
+}
+
+// One Eskom account — a "transformer" in Craig's own words, which could be
+// a dam pump, a pivot, a drag line, a homestead, the dairy, etc. farmId is
+// nullable and left to Craig to assign in the app (several dam/pump names
+// don't obviously belong to one farm or another) — the import never
+// guesses it, and never overwrites name/farmId once the meter exists (see
+// eskom-import.mjs), so an in-app correction always sticks.
+model ElectricityMeter {
+  id        String   @id @default(cuid())
+  accountNo String   @unique
+  name      String
+  farmId    String?
+  farm      Farm?    @relation(fields: [farmId], references: [id])
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  bills ElectricityBill[]
+}
+
+// One monthly Eskom bill for one meter — invoiceNo is Eskom's own tax
+// invoice number, globally unique per bill, so re-running the import on
+// the same PDFs (or a corrected re-send) just upserts rather than
+// duplicating. kWh/demand fields are nullable since a non-demand tariff
+// (e.g. Landrate) only ever reports one all-in kWh total, never a
+// peak/standard/off-peak split or a kVA demand reading.
+model ElectricityBill {
+  id             String   @id @default(cuid())
+  meterId        String
+  meter          ElectricityMeter @relation(fields: [meterId], references: [id], onDelete: Cascade)
+  invoiceNo      String   @unique
+  accountMonth   String // normalized "YYYY-MM"
+  billingDate    DateTime
+  dueDate        DateTime
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  tariffName     String?
+  kwhTotal       Float?
+  kwhPeak        Float?
+  kwhStandard    Float?
+  kwhOffPeak     Float?
+  demandKva      Float?
+  chargesExclVat Float?
+  vat            Float?
+  totalAmountDue Float?
+  sourceFile     String?
+  createdAt      DateTime @default(now())
+
+  @@index([meterId])
 }

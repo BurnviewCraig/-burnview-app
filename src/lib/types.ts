@@ -506,3 +506,33 @@ export type RuraflexBand = {
   endTime: string;
   sortOrder: number;
 };
+
+export type ElectricityMeter = {
+  id: string;
+  accountNo: string;
+  name: string;
+  farmId: string | null;
+  farm: { id: string; name: string } | null;
+  active: boolean;
+  sortOrder: number;
+};
+
+export type ElectricityBill = {
+  id: string;
+  meterId: string;
+  invoiceNo: string;
+  accountMonth: string;
+  billingDate: string;
+  dueDate: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  tariffName: string | null;
+  kwhTotal: number | null;
+  kwhPeak: number | null;
+  kwhStandard: number | null;
+  kwhOffPeak: number | null;
+  demandKva: number | null;
+  chargesExclVat: number | null;
+  vat: number | null;
+  totalAmountDue: number | null;
+};

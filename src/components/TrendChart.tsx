@@ -8,8 +8,10 @@ export type TrendPoint = { date: string; value: number };
 export type ChartRange = (typeof MILK_CHART_RANGES)[number]["id"];
 
 // Shared trend line for milk figures — sold litres per farm, litres/cow per
-// group — with a 1 month / 3 months / year-to-date range selector.
-export function TrendChart({
+// group — with a 1 month / 3 months / year-to-date range selector by
+// default. A caller with coarser (e.g. monthly) data can pass its own
+// `ranges` list instead (e.g. NUTRIENT_RANGES) via the generic R.
+export function TrendChart<R extends string = ChartRange>({
   points,
   range,
   onRangeChange,
@@ -17,15 +19,18 @@ export function TrendChart({
   yLabel,
   height = 160,
   title,
+  ranges,
 }: {
   points: TrendPoint[];
-  range: ChartRange;
-  onRangeChange: (r: ChartRange) => void;
+  range: R;
+  onRangeChange: (r: R) => void;
   unit: string;
   yLabel: string;
   height?: number;
   title?: string;
+  ranges?: readonly { id: R; label: string }[];
 }) {
+  const rangeOptions = ranges ?? (MILK_CHART_RANGES as unknown as readonly { id: R; label: string }[]);
   const filtered = points.filter((p) => withinRange(p.date, range)).sort((a, b) => a.date.localeCompare(b.date));
   const tickInterval = Math.max(0, Math.ceil(filtered.length / 8) - 1);
 
@@ -33,7 +38,7 @@ export function TrendChart({
     <div className="chart-card">
       <h3 className="chart-card-title">{title ?? yLabel}</h3>
       <div className="chip-wrap" style={{ marginBottom: 8 }}>
-        {MILK_CHART_RANGES.map((r) => (
+        {rangeOptions.map((r) => (
           <button key={r.id} className={`range-chip${range === r.id ? " on" : ""}`} onClick={() => onRangeChange(r.id)}>
             {r.label}
           </button>

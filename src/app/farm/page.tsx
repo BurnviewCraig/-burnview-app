@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Map as MapIcon, ClipboardList, Pencil, CloudRain, Wheat, BarChart3, ChevronRight } from "lucide-react";
+import { Map as MapIcon, ClipboardList, Pencil, CloudRain, Wheat, BarChart3, Zap, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
 import { AccessGate } from "@/components/AccessGate";
 
@@ -54,6 +54,14 @@ export default function FarmPage() {
           <div className="menu-row-text">
             <span className="mr-title">Generate report</span>
             <span className="mr-sub">Fertilizer program totals &amp; averages</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+        <Link className="menu-row" href="/farm/eskom">
+          <Zap size={18} strokeWidth={1.75} />
+          <div className="menu-row-text">
+            <span className="mr-title">Eskom</span>
+            <span className="mr-sub">Usage &amp; spend per transformer, per farm</span>
           </div>
           <ChevronRight size={16} />
         </Link>

@@ -252,6 +252,41 @@ export const ORDER_NUMBER_ISSUERS = [
   { name: "Thilila", prefix: "TD" },
 ] as const;
 
+// Eskom account number -> the transformer/site name Craig gave for it.
+// Looked up by eskom-import.mjs the first time a new account is seen — the
+// meter's name and farm after that live in the DB and are never overwritten
+// by a re-import, so an in-app rename or farm assignment always sticks.
+export const ESKOM_METER_NAMES: Record<string, string> = {
+  "5271261442": "Burnside Dam",
+  "5440672060": "Umzinkulu Pump",
+  "5540951175": "Farmgate Dam",
+  "5850905084": "Bongaan House",
+  "6150887353": "Burnview Dairy Dam",
+  "6203050406": "Smithfield Houses",
+  "6377247446": "Smithfield Maize Pivots",
+  "6503560467": "Stockton Dairy",
+  "6925259619": "Middle Dam",
+  "6989901990": "Everfair Corner Dam",
+  "7161376382": "Burnview Slurry + Borehole",
+  "7378128329": "Burnview Dairy",
+  "7387876615": "Everfair Dairy",
+  "8082136431": "Glenroy Pivots",
+  "8107674733": "Everfair Drag Lines 2",
+  "8290523034": "Charlie Dam",
+  "8598797911": "Burnview Workshop",
+  "8732740708": "Everfair Big Dam",
+  "8920641141": "Everfair Home Pivot",
+  "9229705578": "Glenroy Drag Lines",
+  "9257389742": "Everfair Turkeys Nest Dam",
+  "9315439376": "Stockton Didi Dam",
+  "9520650258": "Stockton Didi River",
+  "9836620624": "Burnview Silage Pits",
+  "9856549163": "Glenroy Transfer",
+  "9895856590": "Stockton P Pivot",
+  "9898576664": "Stockton Gravity Pump",
+  "9997945297": "Belt Pump",
+};
+
 function rCodes(start: number, end: number): string[] {
   const codes: string[] = [];
   for (let i = start; i <= end; i++) codes.push(`R${i}`);
