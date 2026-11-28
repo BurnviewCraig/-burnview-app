@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Activity, ChevronRight } from "lucide-react";
+import { CalendarClock, Activity, Gauge, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
 import { AccessGate } from "@/components/AccessGate";
 
@@ -15,7 +15,7 @@ export default function IrrigationHubPage() {
             <CalendarClock size={18} strokeWidth={1.75} />
             <div className="menu-row-text">
               <span className="mr-title">Irrigation scheduling</span>
-              <span className="mr-sub">Weekly pivot run planner &amp; water meters</span>
+              <span className="mr-sub">Weekly pivot run planner</span>
             </div>
             <ChevronRight size={16} />
           </Link>
@@ -24,6 +24,14 @@ export default function IrrigationHubPage() {
             <div className="menu-row-text">
               <span className="mr-title">Live monitoring</span>
               <span className="mr-sub">Tank levels, pump status, remote start/stop &amp; triggers</span>
+            </div>
+            <ChevronRight size={16} />
+          </Link>
+          <Link className="menu-row" href="/farm/irrigation/water-meters">
+            <Gauge size={18} strokeWidth={1.75} />
+            <div className="menu-row-text">
+              <span className="mr-title">Water meters</span>
+              <span className="mr-sub">Readings &amp; meter settings</span>
             </div>
             <ChevronRight size={16} />
           </Link>

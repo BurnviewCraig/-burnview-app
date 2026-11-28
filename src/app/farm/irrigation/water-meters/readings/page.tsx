@@ -78,11 +78,11 @@ export default function WaterMetersPage() {
 
   const [active, setActive] = useState<{ meter: WaterMeter; reading: WaterMeterReading | "new" } | null>(null);
 
-  if (farmsLoading || metersLoading) return <div className="screen"><Header title="Water meters" backHref="/farm/irrigation/scheduling" /><Spinner /></div>;
+  if (farmsLoading || metersLoading) return <div className="screen"><Header title="Water meter readings" backHref="/farm/irrigation/water-meters" /><Spinner /></div>;
 
   return (
     <div className="screen">
-      <Header title="Water meters" backHref="/farm/irrigation/scheduling" />
+      <Header title="Water meter readings" backHref="/farm/irrigation/water-meters" />
 
       <div className="tabs">
         <button className={`tab${farmFilter === "all" ? " active" : ""}`} onClick={() => setFarmFilter("all")}>All</button>
