@@ -155,7 +155,16 @@ function parseBill(lines, fileName) {
   const monthNum = MONTHS[accountMonthRaw[1]];
   const accountMonth = monthNum ? `${accountMonthRaw[2]}-${monthNum}` : null;
 
-  const totalAmountDue = num(matchLine(lines, labelRe("TOTAL AMOUNT DUE", "\\s+([\\d,]+\\.\\d{2})"))?.[1]);
+  // The label and its value never sit adjacently on one line in these PDFs —
+  // Eskom's layout repeats the amount once before the label (from an
+  // overlapping column) and once after it prefixed with "R", e.g.
+  // "146,411.74 TOTAL DUE R 146,411.74" or "11,221.24 TOTAL AMOUNT DUE R
+  // 11,221.24". "AMOUNT" is optional since some templates print "TOTAL DUE"
+  // instead of "TOTAL AMOUNT DUE"; the "R ..." suffix requirement is what
+  // keeps this from matching the bare "ARREARS TOTAL AMOUNT DUE" header line.
+  const totalAmountDue = num(
+    matchLine(lines, new RegExp(fuzzy("TOTAL") + "\\s+(?:" + fuzzy("AMOUNT") + "\\s+)?" + fuzzy("DUE") + "\\s+R\\s+(-?[\\d,]+\\.\\d{2})"))?.[1]
+  );
   const chargesExclVat = num(matchLine(lines, labelRe("TOTAL CHARGES", "(?:\\s*FOR\\s*BILLING\\s*PERIOD)?\\s+R\\s+([\\d,]+\\.\\d{2})"))?.[1]);
   const vat = num(matchLine(lines, labelRe("VAT RAISED ON ITEMS AT 15%", "\\s+R\\s+([\\d,]+\\.\\d{2})"))?.[1]);
   // A bill can carry more than one "TARIFF NAME:" line (e.g. a small fixed

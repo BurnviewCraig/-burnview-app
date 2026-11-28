@@ -16,9 +16,24 @@ const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-function monthLabel(accountMonth: string) {
-  const [y, m] = accountMonth.split("-");
+function monthLabel(month: string) {
+  const [y, m] = month.split("-");
   return `${MONTH_NAMES[Number(m) - 1]} ${y}`;
+}
+
+// Eskom's printed "ACCOUNT MONTH" is the month the bill is issued in, not
+// the month the electricity was actually used — Craig reads meters on the
+// 6th–8th, and that reading closes out the PREVIOUS month's billing period
+// (periodStart usually falls on the 6th–9th of the usage month, periodEnd a
+// few days into the following one). So for any month-based grouping —
+// "latest month", YTD, chart x-axis — use the period's own start month,
+// falling back to accountMonth minus one month for the handful of older
+// bills with no parsed period dates.
+function usageMonth(b: ElectricityBill): string {
+  if (b.periodStart) return b.periodStart.slice(0, 7);
+  const [y, m] = b.accountMonth.split("-").map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export default function EskomPage() {
@@ -44,7 +59,7 @@ function EskomPageInner() {
   }, [bills]);
 
   const latestMonth = useMemo(
-    () => bills.reduce((max, b) => (b.accountMonth > max ? b.accountMonth : max), ""),
+    () => bills.reduce((max, b) => { const um = usageMonth(b); return um > max ? um : max; }, ""),
     [bills]
   );
   const currentYear = new Date().getFullYear();
@@ -63,12 +78,13 @@ function EskomPageInner() {
     let hasLatest = false;
     groupMeters.forEach((m) => {
       (billsByMeter.get(m.id) ?? []).forEach((b) => {
-        if (b.accountMonth === latestMonth) {
+        const um = usageMonth(b);
+        if (um === latestMonth) {
           hasLatest = true;
           latestKwh += b.kwhTotal ?? 0;
           latestRand += b.totalAmountDue ?? 0;
         }
-        if (b.accountMonth.startsWith(String(currentYear))) ytdRand += b.totalAmountDue ?? 0;
+        if (um.startsWith(String(currentYear))) ytdRand += b.totalAmountDue ?? 0;
       });
     });
     return { latestKwh, latestRand, ytdRand, hasLatest };
@@ -78,7 +94,8 @@ function EskomPageInner() {
     const byMonth = new Map<string, number>();
     bills.forEach((b) => {
       if (b.totalAmountDue == null) return;
-      byMonth.set(b.accountMonth, (byMonth.get(b.accountMonth) ?? 0) + b.totalAmountDue);
+      const um = usageMonth(b);
+      byMonth.set(um, (byMonth.get(um) ?? 0) + b.totalAmountDue);
     });
     return [...byMonth.entries()].map(([month, value]) => ({ date: `${month}-01`, value: Math.round(value) }));
   }, [bills]);
@@ -93,6 +110,7 @@ function EskomPageInner() {
     });
   };
   const [compareRange, setCompareRange] = useState<Range>("1y");
+  const [compareMetric, setCompareMetric] = useState<"kwh" | "rand">("rand");
   const compareSeries = useMemo(() => {
     return meters
       .filter((m) => selectedIds.has(m.id))
@@ -100,10 +118,13 @@ function EskomPageInner() {
         key: m.id,
         label: m.name,
         points: (billsByMeter.get(m.id) ?? [])
-          .filter((b) => b.kwhTotal != null)
-          .map((b) => ({ date: `${b.accountMonth}-01`, value: Math.round(b.kwhTotal!) })),
+          .filter((b) => (compareMetric === "kwh" ? b.kwhTotal != null : b.totalAmountDue != null))
+          .map((b) => ({
+            date: `${usageMonth(b)}-01`,
+            value: Math.round(compareMetric === "kwh" ? b.kwhTotal! : b.totalAmountDue!),
+          })),
       }));
-  }, [meters, selectedIds, billsByMeter]);
+  }, [meters, selectedIds, billsByMeter, compareMetric]);
 
   const [editing, setEditing] = useState<Record<string, { name: string; farmId: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -158,16 +179,20 @@ function EskomPageInner() {
         </div>
 
         <p className="field-label" style={{ padding: "16px 18px 0" }}>Compare meters</p>
-        <p className="ds-note" style={{ padding: "2px 18px 6px" }}>Tick meters below to plot their kWh usage against each other.</p>
+        <p className="ds-note" style={{ padding: "2px 18px 6px" }}>Tick meters below to plot them against each other.</p>
+        <div className="chip-wrap" style={{ padding: "0 18px 6px" }}>
+          <button className={`range-chip${compareMetric === "rand" ? " on" : ""}`} onClick={() => setCompareMetric("rand")}>Rand (R)</button>
+          <button className={`range-chip${compareMetric === "kwh" ? " on" : ""}`} onClick={() => setCompareMetric("kwh")}>kWh</button>
+        </div>
         <div style={{ padding: "0 18px" }}>
           <MultiTrendChart
             series={compareSeries}
             range={compareRange}
             onRangeChange={setCompareRange}
             ranges={NUTRIENT_RANGES}
-            unit=" kWh"
-            yLabel="kWh"
-            title="kWh comparison"
+            unit={compareMetric === "rand" ? " ZAR" : " kWh"}
+            yLabel={compareMetric === "rand" ? "Rand" : "kWh"}
+            title={compareMetric === "rand" ? "Total charge comparison (incl. service costs)" : "kWh comparison"}
           />
         </div>
 
@@ -178,7 +203,7 @@ function EskomPageInner() {
             <div className="menu-list">
               {g.meters.map((m) => {
                 const edit = editing[m.id];
-                const latest = (billsByMeter.get(m.id) ?? []).find((b) => b.accountMonth === latestMonth);
+                const latest = (billsByMeter.get(m.id) ?? []).find((b) => usageMonth(b) === latestMonth);
                 return (
                   <div key={m.id} className="settings-row">
                     {edit ? (
